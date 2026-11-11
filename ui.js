@@ -38,6 +38,20 @@
   // 행성 번호를 "5.4 AU" 같은 거리 글자로
   const distText = (index) => O.formatAU(O.distanceAU(index)) + ' AU';
 
+  // 스테이지 도전과제 설명: 어디까지 갔고 다음은 어디인지
+  const stageSub = (lv) => {
+    if (!lv) return 'Land on a planet to begin';
+    const next = O.STAGES[lv];
+    return 'Reached ' + O.STAGES[lv - 1].name + (next ? ' &middot; next: ' + next.name : ' &middot; MAX');
+  };
+
+  // 확인하지 않은 새 도전과제가 있으면 MENU 버튼과 ACHIEVEMENTS 탭에 점 표시
+  function refreshBadge() {
+    const on = O.getNum(O.KEY.newAch, 0) === 1;
+    menuBtn.classList.toggle('has-new', on);
+    tabs.forEach((t) => t.classList.toggle('has-new', on && t.dataset.tab === 'achievements'));
+  }
+
   const render = {
     settings() {
       const lv = O.sfx.level, max = O.VOLUME_STEPS;
@@ -93,8 +107,8 @@
             '<div class="ach-top"><span class="dot"></span><span class="ach-name">' + a.name + '</span>' +
               '<span class="ach-lv">LV ' + lv + ' / ' + a.tiers.length + '</span></div>' +
             '<div class="segs">' + segs + '</div>' +
-            '<div class="ach-sub">' + value + (next ? ' / ' + next : '') + ' ' + a.unit +
-              (next ? '' : ' &middot; MAX') + '</div>' +
+            '<div class="ach-sub">' + (a.id === 'stage' ? stageSub(lv) :
+              value + (next ? ' / ' + next : '') + ' ' + a.unit + (next ? '' : ' &middot; MAX')) + '</div>' +
           '</div>';
       }
       body.innerHTML = html;
@@ -103,6 +117,8 @@
 
   function show(tab) {
     current = tab;
+    if (tab === 'achievements') O.setNum(O.KEY.newAch, 0);   // 탭을 열면 확인한 것으로 처리
+    refreshBadge();
     tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
     render[tab]();
     body.scrollTop = 0;
@@ -144,5 +160,6 @@
     if (panel.hidden) open(); else close();
   });
 
-  O.ui = { open, close, show, sync };
+  refreshBadge();
+  O.ui = { open, close, show, sync, refreshBadge };
 })();

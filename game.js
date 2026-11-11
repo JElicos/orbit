@@ -186,6 +186,8 @@
       this.bestIndex = O.getNum(O.KEY.bestDist, 0);         // 역대 가장 멀리 간 행성 번호
       this.bestLineY = null;                                // 역대 최장 거리 위치(BEST 기록선)
       this.recordShown = false;
+      this.stageTier = O.valueOf('stage');                  // 이미 달성한 스테이지 도전과제 단계
+      this.unlocked = [];                                   // 이번 시도에서 달성한 도전과제
       this.stage = 0;                                       // 현재 스테이지(0부터)
       this.prevStage = 0;                                   // 배경이 바뀌는 동안의 이전 스테이지
       this.themeMix = 1;                                    // 이전 -> 현재 배경 전환 진행도(0~1)
@@ -350,9 +352,15 @@
       Sfx.stage();
     }
 
-    achieved(name, level) {
-      this.toast('ACHIEVEMENT  ' + name + '  LV ' + level, '#ffd166');
+    // 도전과제 달성: 바로 알리고, 게임 오버 화면에 모아 보여줄 목록에도 기록
+    achieved(ach, level) {
+      this.toast('ACHIEVEMENT  ' + ach.name + '  LV ' + level, '#ffd166');
       Sfx.achieve();
+      const found = this.unlocked.find((u) => u.id === ach.id);
+      if (found) found.level = Math.max(found.level, level);   // 같은 종목은 가장 높은 단계만
+      else this.unlocked.push({ id: ach.id, name: ach.name, level });
+      O.setNum(O.KEY.newAch, 1);
+      if (O.ui) O.ui.refreshBadge();
     }
 
     popup(x, y, msg, color) {
@@ -488,10 +496,15 @@
         O.saveStats(this.stats);
         const ach = O.achievement(p.type);
         const lv = ach.tiers.indexOf(this.stats[p.type]);
-        if (lv >= 0) this.achieved(ach.name, lv + 1);
+        if (lv >= 0) this.achieved(ach, lv + 1);
         const stage = O.stageOf(p.index);
         if (stage !== this.stage) this.enterStage(stage);
         this.updateDist();
+        if (p.index > O.getNum(O.KEY.bestDist, 0)) O.setNum(O.KEY.bestDist, p.index);   // 도중에 꺼도 남도록 바로 저장
+        if (stage + 1 > this.stageTier) {
+          this.stageTier = stage + 1;
+          this.achieved(O.achievement('stage'), this.stageTier);
+        }
         if (this.bestIndex >= 1 && p.index > this.bestIndex && !this.recordShown) {
           this.recordShown = true;
           this.toast('NEW DISTANCE RECORD', '#ffd166');
@@ -512,7 +525,7 @@
       this.score += n;
       let tierUp = false;
       while (this.scoreTier < SCORE_TIERS.length && this.score >= SCORE_TIERS[this.scoreTier]) { this.scoreTier++; tierUp = true; }
-      if (tierUp) this.achieved(O.achievement('score').name, this.scoreTier);
+      if (tierUp) this.achieved(O.achievement('score'), this.scoreTier);
       this.scoreText.setText(String(this.score));
       this.scoreText.setScale(1.25);
       this.tweens.add({ targets: this.scoreText, scale: 1, duration: 180 });
@@ -544,7 +557,10 @@
       O.addHistory({ score: this.score, combo: this.maxCombo, planets: this.jumps, dist: this.maxIndex, at: Date.now() });
 
       this.time.delayedCall(350, () => {
-        const mid = H / 2 - 190;   // 게임 오버 글자 묶음의 맨 윗줄
+        // 이번 판에서 달성한 도전과제(최대 4줄, 넘으면 "+N MORE")
+        const shown = this.unlocked.slice(0, 4), more = this.unlocked.length - shown.length;
+        const achH = this.unlocked.length ? 44 + (shown.length + (more > 0 ? 1 : 0)) * 28 : 0;
+        const mid = H / 2 - 190 - achH / 2;   // 게임 오버 글자 묶음의 맨 윗줄
         this.distText.setVisible(false);
         const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setScrollFactor(0).setDepth(9).setAlpha(0);
         const mk = (y, s, size, color) => this.add.text(W / 2, y, s, {
@@ -558,8 +574,13 @@
           mk(mid + 196, this.distLabel(this.maxIndex) + '  ·  ' + O.STAGES[O.stageOf(this.maxIndex)].name, 28, '#ffffff'),
           mk(mid + 234, newDist ? 'NEW DISTANCE RECORD!' : 'FARTHEST ' + this.distLabel(this.bestIndex), 20, newDist ? '#ffd166' : '#8fa3c8'),
           mk(mid + 280, 'MAX COMBO x' + this.maxCombo + '  ·  ALL-TIME x' + this.bestCombo, 20, '#8fa3c8'),
-          mk(mid + 370, this.isTouch() ? 'TAP TO RETRY' : 'SPACE / CLICK TO RETRY', 22, '#cfe3ff'),
+          mk(mid + 370 + achH, this.isTouch() ? 'TAP TO RETRY' : 'SPACE / CLICK TO RETRY', 22, '#cfe3ff'),
         ];
+        if (this.unlocked.length) {
+          items.push(mk(mid + 334, 'ACHIEVEMENTS UNLOCKED', 18, '#ffd166').setLetterSpacing(3));
+          shown.forEach((u, i) => items.push(mk(mid + 368 + i * 28, u.name + '   LV ' + u.level, 20, '#ffffff')));
+          if (more > 0) items.push(mk(mid + 368 + shown.length * 28, '+' + more + ' MORE', 18, '#8fa3c8'));
+        }
         this.scoreText.setVisible(false); this.comboText.setVisible(false);
         this.tweens.add({ targets: items, alpha: { from: 0, to: 1 }, duration: 250 });
         dim.setAlpha(0);

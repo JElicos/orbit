@@ -6,11 +6,12 @@ window.ORBIT = (() => {
     best: 'orbitjump.best',
     bestCombo: 'orbitjump.bestCombo',
     bestDist: 'orbitjump.bestDist',     // 가장 멀리 간 행성 번호(거리는 distanceAU로 환산)
+    newAch: 'orbitjump.newAch',         // 아직 확인하지 않은 새 도전과제가 있으면 1
     volume: 'orbitjump.volume',
     history: 'orbitjump.history',
     stats: 'orbitjump.stats',
   };
-  const VERSION = '1.9';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
+  const VERSION = '1.10';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
   const VOLUME_STEPS = 5;     // 0(끔) ~ 5
   const HISTORY_MAX = 10;
 
@@ -97,11 +98,20 @@ window.ORBIT = (() => {
     { id: 'shrink', name: 'SHRINKING PLANETS', unit: 'landings', color: '#ff6b6b', tiers: PLANET_TIERS_RARE },
     { id: 'score', name: 'HIGH SCORE', unit: 'points in one run', color: '#ffd166',
       tiers: [10, 25, 50, 100, 200, 350, 500, 750, 1000, 1500] },
+    // 도달한 스테이지 번호(1 = EARTH ... 10 = BEYOND)
+    { id: 'stage', name: 'EXPLORER', unit: 'stage reached', color: '#f4a261', tiers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
   ];
   const achievement = (id) => ACHIEVEMENTS.find((a) => a.id === id);
   const tierOf = (tiers, value) => tiers.filter((t) => value >= t).length;
   // 도전과제의 현재 값: 행성은 누적 횟수, 점수는 한 번의 시도 최고 점수
-  const valueOf = (id) => (id === 'score' ? getNum(KEY.best, 0) : loadStats()[id] || 0);
+  const valueOf = (id) => {
+    if (id === 'score') return getNum(KEY.best, 0);
+    if (id === 'stage') {   // 행성에 한 번이라도 옮겨 탔으면 1(EARTH)부터
+      const far = getNum(KEY.bestDist, 0);
+      return far >= 1 ? stageOf(far) + 1 : 0;
+    }
+    return loadStats()[id] || 0;
+  };
 
   return {
     KEY, VERSION, VOLUME_STEPS, HISTORY_MAX, ACHIEVEMENTS,

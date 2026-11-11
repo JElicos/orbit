@@ -57,6 +57,15 @@
     color: #8fa3c8; background: rgba(7,11,26,.6);
   }
   #menuBtn:hover { color: #fff; border-color: #fff; }
+  /* 확인하지 않은 새 도전과제 표시 */
+  #menuBtn.has-new::after {
+    content: ''; position: absolute; top: -.25em; right: -.2em; width: .75em; height: .75em;
+    border-radius: 50%; background: #ffd166;
+  }
+  #ui .tab.has-new::after {
+    content: ''; display: inline-block; width: .5em; height: .5em; margin-left: .4em;
+    border-radius: 50%; background: #ffd166; vertical-align: .15em;
+  }
 
   #panel {
     pointer-events: auto; position: absolute; inset: 0; box-sizing: border-box;
