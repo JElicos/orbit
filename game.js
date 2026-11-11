@@ -83,6 +83,27 @@
     return (r << 16) | (g << 8) | b;
   };
 
+  // 점 (x0,y0)에서 (dx,dy)만큼 움직이는 경로가 중심 (cx,cy), 반경 r인 원에 처음 들어가는 지점.
+  // 0~1 사이 값(0 = 출발점, 1 = 도착점)을 돌려주고, 닿지 않으면 2를 돌려줍니다.
+  const segEnter = (x0, y0, dx, dy, cx, cy, r) => {
+    const fx = x0 - cx, fy = y0 - cy;
+    const c = fx * fx + fy * fy - r * r;
+    if (c <= 0) return 0;                       // 이미 원 안
+    const a = dx * dx + dy * dy;
+    if (a === 0) return 2;
+    const b = 2 * (fx * dx + fy * dy);
+    const disc = b * b - 4 * a * c;
+    if (disc < 0 || b >= 0) return 2;           // 스치지 않거나 멀어지는 중
+    const at = (-b - Math.sqrt(disc)) / (2 * a);
+    return at <= 1 ? at : 2;
+  };
+  // 같은 경로의 0~end 구간에서 점 (px,py)까지의 가장 가까운 거리
+  const segDist = (x0, y0, dx, dy, end, px, py) => {
+    const a = dx * dx + dy * dy;
+    const at = a === 0 ? 0 : clamp(((px - x0) * dx + (py - y0) * dy) / a, 0, end);
+    return Math.hypot(x0 + dx * at - px, y0 + dy * at - py);
+  };
+
   // 스테이지별 배경 테마(data.js의 STAGES와 같은 순서).
   // top/bottom: 배경 위아래 색, star: 별 색, starA: 별 밝기 배율, sun: 아래쪽 태양빛 세기
   const THEMES = [
@@ -494,12 +515,12 @@
       this.buildUI();
 
       this.input.keyboard.addCapture('SPACE');
-      this.input.keyboard.on('keydown-SPACE', (e) => { if (!e.repeat) this.action(); });
+      this.input.keyboard.on('keydown-SPACE', (e) => { if (!e.repeat) this.action(e.timeStamp); });
       this.input.keyboard.on('keydown-M', () => {
         Sfx.muted = !Sfx.muted;
         this.toast(Sfx.muted ? 'SOUND OFF' : 'SOUND ON');
       });
-      this.input.on('pointerdown', () => this.action());
+      this.input.on('pointerdown', (pointer) => this.action(pointer && pointer.event ? pointer.event.timeStamp : 0));
 
 
       this.cameras.main.scrollY = this.camY;
@@ -736,7 +757,11 @@
     }
 
     // ----- 입력 -----
-    action() {
+    // at: 누른 시각(입력 이벤트의 timeStamp). 없으면 지금 시각을 씁니다.
+    action(at) {
+      // 누른 시각을 먼저 확정(아래 처리에 시간이 걸려도 영향받지 않도록). 값이 이상하면 지금 시각을 씀.
+      const nowAt = performance.now();
+      const pressedAt = (at > 0 && at <= nowAt + 5 && at >= nowAt - 500) ? at : nowAt;
       Sfx.init();
       if (this.state === 'dead') {
         if (this.t - this.deadAt > 0.5) this.scene.restart();
@@ -755,6 +780,14 @@
       } else {
         this.quick = b.swept < TAU;   // 한 바퀴 돌기 전에 뛰면 콤보 유지
       }
+      // 화면은 일정 간격으로만 갱신되므로, 마지막 갱신 뒤 누른 순간까지 공이 더 돈 만큼을 반영합니다.
+      // 이렇게 하지 않으면 같은 타이밍에 눌러도 최대 한 프레임만큼 발사 각도가 들쭉날쭉해집니다.
+      const late =clamp((pressedAt - (this.lastUpdateAt || pressedAt)) / 1000, 0, 0.05);
+      b.angle += b.dir * p.omega * late;
+      b.swept += p.omega * late;
+      b.x = p.x + Math.cos(b.angle) * b.orbR;
+      b.y = p.y + Math.sin(b.angle) * b.orbR;
+
       // 접선 방향으로 발사
       b.vx = -Math.sin(b.angle) * b.dir * FLY_SPEED;
       b.vy = Math.cos(b.angle) * b.dir * FLY_SPEED;
@@ -920,15 +953,24 @@
         b.x = p.x + Math.cos(b.angle) * b.orbR;
         b.y = p.y + Math.sin(b.angle) * b.orbR;
       } else if (this.state === 'fly') {
-        b.x += b.vx * dt; b.y += b.vy * dt;
-
+        // 이번 프레임에 지나가는 경로 전체를 검사합니다.
+        // 끝 지점만 보면 링 가장자리를 얇게 스칠 때 두 프레임 사이로 빠져나갈 수 있기 때문입니다.
+        const x0 = b.x, y0 = b.y, dx = b.vx * dt, dy = b.vy * dt;
+        let hitAt = 2, hitPlanet = null, hitHole = null;   // hitAt: 경로에서 처음 닿는 지점(0~1), 2면 없음
         for (const p of this.planets) {
           if (p === b.left) continue;
-          if (Math.hypot(b.x - p.x, b.y - p.y) <= p.orbitR + 4) { this.capture(p); break; }
+          const at = segEnter(x0, y0, dx, dy, p.x, p.y, p.orbitR + 4);
+          if (at < hitAt) { hitAt = at; hitPlanet = p; hitHole = null; }
         }
-        if (this.state === 'fly') {
+        for (const h of this.holes) {
+          const at = segEnter(x0, y0, dx, dy, h.x, h.y, HOLE_KILL);
+          if (at < hitAt) { hitAt = at; hitHole = h; hitPlanet = null; }
+        }
+        const endAt = Math.min(1, hitAt);   // 행성이나 블랙홀에 닿았으면 거기까지만 이동
+
+        {
           for (const s of this.stars) {
-            if (!s.taken && Math.hypot(b.x - s.x, b.y - s.y) <= STAR_PICK_R) {
+            if (!s.taken && segDist(x0, y0, dx, dy, endAt, s.x, s.y) <= STAR_PICK_R) {
               s.taken = true;
               const worth = s.big ? 5 : 1;          // 보유 별 증가량
               O.addStars(worth);
@@ -941,12 +983,15 @@
               Sfx.star();
             }
           }
-          for (const h of this.holes) {
-            if (Math.hypot(b.x - h.x, b.y - h.y) <= HOLE_KILL) { this.die(h); break; }
-          }
-          if (b.x < -30 || b.x > W + 30 || b.y > this.camY + H + 30 || b.y < this.camY - 200) this.die();
         }
+
+        b.x = x0 + dx * endAt;
+        b.y = y0 + dy * endAt;
+        if (hitHole) this.die(hitHole);
+        else if (hitPlanet) this.capture(hitPlanet);
+        else if (b.x < -30 || b.x > W + 30 || b.y > this.camY + H + 30 || b.y < this.camY - 200) this.die();
       }
+      this.lastUpdateAt = performance.now();   // 누른 시각과의 차이를 재기 위한 기준(action 참고)
 
       if (this.suck && this.suck.k < 1) this.suck.k = Math.min(1, this.suck.k + dt / 0.45);
       // 블랙홀이 처음 화면에 들어오면 한 번 안내
