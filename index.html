@@ -73,21 +73,23 @@
     padding: calc(1.2em + env(safe-area-inset-top, 0px)) 1.4em calc(1.6em + env(safe-area-inset-bottom, 0px));
     background: rgba(5,8,20,.94);
   }
-  .panel-head { display: flex; align-items: stretch; gap: .5em; border-bottom: 1px solid rgba(143,163,200,.3); }
-  .tabs { display: flex; flex: 1; min-width: 0; }
-  .tab {
-    flex: 1 1 auto; padding: 1em .15em .9em; font-size: .74em; font-weight: 700; letter-spacing: .05em;
-    color: #8fa3c8; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap;
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .7em; }
+  .panel-title { font-size: 1.1em; font-weight: 700; letter-spacing: .3em; color: #8fa3c8; }
+  /* 탭은 2줄 x 2칸의 버튼. 어떤 글꼴에서도 글자가 서로 붙지 않습니다. */
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .5em; }
+  #ui .tab {
+    padding: .85em .4em; font-size: .9em; font-weight: 700; letter-spacing: .1em; white-space: nowrap;
+    color: #8fa3c8; border: 1px solid rgba(143,163,200,.3); border-radius: .6em;
   }
-  #ui .tab { color: #8fa3c8; border-bottom: 3px solid transparent; }
   #ui .tab:hover { color: #fff; }
-  #ui .tab.active { color: #fff; border-bottom-color: #4cc9f0; }
-  #ui #closeBtn { font-size: 1.8em; line-height: 1; padding: 0 .3em; color: #8fa3c8; }
+  #ui .tab.active { color: #fff; border-color: #4cc9f0; background: rgba(76,201,240,.14); }
+  #ui #closeBtn { font-size: 2em; line-height: 1; padding: 0 .2em; color: #8fa3c8; }
   #ui #closeBtn:hover { color: #fff; }
 
   #tabBody { flex: 1; min-height: 0; overflow-y: auto; padding-top: 1.6em; }
   #tabBody h2 { margin: 0 0 1em; font-size: .9em; letter-spacing: .16em; color: #8fa3c8; font-weight: 700; }
   .note { color: #8fa3c8; font-size: .95em; line-height: 1.5; }
+  .note.small { font-size: .8em; margin: .6em 0 1.2em; }
 
   /* SETTINGS */
   .vol { display: flex; align-items: flex-end; justify-content: center; gap: 1.6em; margin-top: 2em; }
@@ -177,13 +179,14 @@
   <button id="menuBtn" type="button" tabindex="-1">MENU</button>
   <div id="panel" hidden>
     <div class="panel-head">
-      <div class="tabs">
-        <button type="button" class="tab" data-tab="settings" tabindex="-1">SETTINGS</button>
-        <button type="button" class="tab" data-tab="records" tabindex="-1">RECORDS</button>
-        <button type="button" class="tab" data-tab="achievements" tabindex="-1">ACHIEVEMENTS</button>
-        <button type="button" class="tab" data-tab="customize" tabindex="-1">CUSTOMIZE</button>
-      </div>
+      <span class="panel-title">MENU</span>
       <button id="closeBtn" type="button" tabindex="-1" aria-label="Close">&times;</button>
+    </div>
+    <div class="tabs">
+      <button type="button" class="tab" data-tab="settings" tabindex="-1">SETTINGS</button>
+      <button type="button" class="tab" data-tab="records" tabindex="-1">RECORDS</button>
+      <button type="button" class="tab" data-tab="achievements" tabindex="-1">ACHIEVEMENTS</button>
+      <button type="button" class="tab" data-tab="customize" tabindex="-1">CUSTOMIZE</button>
     </div>
     <div id="tabBody"></div>
   </div>

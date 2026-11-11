@@ -8,6 +8,7 @@ window.ORBIT = (() => {
     bestDist: 'orbitjump.bestDist',     // 가장 멀리 간 행성 번호(거리는 distanceAU로 환산)
     newAch: 'orbitjump.newAch',         // 아직 확인하지 않은 새 도전과제가 있으면 1
     showFps: 'orbitjump.showFps',       // 초당 프레임 수 표시(1이면 켬)
+    glow: 'orbitjump.glow',             // 화면 전체 발광 효과(저장값이 없으면 PC는 켬, 폰은 끔)
     stars: 'orbitjump.stars',           // 보유 별(꾸미기 항목을 사는 데 씀)
     owned: 'orbitjump.owned',           // 구매한 꾸미기 항목 id 목록
     equip: 'orbitjump.equip',           // 장착 중인 항목 { ball, trail }
@@ -15,7 +16,7 @@ window.ORBIT = (() => {
     history: 'orbitjump.history',
     stats: 'orbitjump.stats',
   };
-  const VERSION = '1.12';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
+  const VERSION = '1.13';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
   const VOLUME_STEPS = 5;     // 0(끔) ~ 5
   const HISTORY_MAX = 10;
 
@@ -186,7 +187,11 @@ window.ORBIT = (() => {
   const rewardsFor = (achId, fromLevel, toLevel) => allItems().filter((x) =>
     x.unlock && x.unlock.ach === achId && x.unlock.level > fromLevel && x.unlock.level <= toLevel);
 
+  // 터치로 조작하는 기기(폰, 태블릿)
+  const isMobile = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
   return {
+    isMobile,
     COSMETICS, getStars, addStars, isUnlocked, buy, getEquip, equip, rewardsFor,
     KEY, VERSION, VOLUME_STEPS, HISTORY_MAX, ACHIEVEMENTS,
     STAGE_LEN, STAGES, stageOf, distanceAU, formatAU,

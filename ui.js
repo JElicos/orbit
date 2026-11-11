@@ -52,6 +52,13 @@
     tabs.forEach((t) => t.classList.toggle('has-new', on && t.dataset.tab === 'achievements'));
   }
 
+  // 켜고 끄는 설정. 저장된 값이 없을 때의 기본값: 발광 효과는 PC에서만 켬.
+  const toggleDefault = (name) => (name === 'glow' && !O.isMobile ? 1 : 0);
+  const toggleOn = (name) => O.getNum(O.KEY[name], toggleDefault(name)) === 1;
+  const toggleRow = (name, label) =>
+    '<button type="button" class="toggle' + (toggleOn(name) ? ' on' : '') + '" data-toggle="' + name +
+    '" tabindex="-1"><span>' + label + '</span><i></i></button>';
+
   let pendingBuy = null;   // 구매 확인을 기다리는 항목 id
   let shopNote = '';       // 꾸미기 탭 위쪽 안내 문구
 
@@ -113,8 +120,9 @@
         '<p class="vol-label">' + (lv === 0 ? 'OFF' : lv + ' / ' + max) + '</p>' +
         '<p class="note">Press M during play to mute or unmute quickly.</p>' +
         '<h2 class="gap">DISPLAY</h2>' +
-        '<button type="button" class="toggle' + (O.getNum(O.KEY.showFps, 0) === 1 ? ' on' : '') +
-          '" data-toggle="showFps" tabindex="-1"><span>SHOW FPS</span><i></i></button>' +
+        toggleRow('glow', 'GLOW EFFECT') +
+        '<p class="note small">Soft light bloom over the whole screen. Looks nicer but is slow on phones.</p>' +
+        toggleRow('showFps', 'SHOW FPS') +
         '<p class="note ver">VERSION ' + O.VERSION + '</p>';
     },
 
@@ -207,8 +215,8 @@
     }
     const toggle = e.target.closest('[data-toggle]');
     if (toggle) {
-      const key = O.KEY[toggle.dataset.toggle];
-      O.setNum(key, O.getNum(key, 0) === 1 ? 0 : 1);
+      const name = toggle.dataset.toggle;
+      O.setNum(O.KEY[name], toggleOn(name) ? 0 : 1);
       render.settings();
       const scene = game.scene.getScene('game');
       if (scene && scene.applySettings) scene.applySettings();
