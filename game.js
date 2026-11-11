@@ -29,6 +29,14 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+  // 렌더링 배율: 화면의 실제 픽셀 수에 맞춰 1~3배로 그림(게임 속 좌표는 540x960 그대로)
+  const RES = (() => {
+    const dpr = window.devicePixelRatio || 1;
+    const fit = Math.min(window.innerWidth / W, window.innerHeight / H) * dpr;
+    return clamp(Math.ceil((fit || 1) * 2) / 2, 1, 3);
+  })();
+  const TEXT_RES = Math.max(2, Math.ceil(RES));
+
   const O = window.ORBIT;   // 저장 데이터와 도전과제 정의(data.js)
   const SCORE_TIERS = O.achievement('score').tiers;
 
@@ -124,15 +132,18 @@
 
       if (!this.textures.exists('dot')) {
         const tg = this.make.graphics({ x: 0, y: 0, add: false });
-        tg.fillStyle(0xffffff, 1); tg.fillCircle(8, 8, 8);
-        tg.generateTexture('dot', 16, 16); tg.destroy();
+        tg.fillStyle(0xffffff, 1); tg.fillCircle(24, 24, 24);
+        tg.generateTexture('dot', 48, 48); tg.destroy();
       }
+
+      // 고해상도로 그리되 게임 속 좌표는 그대로 쓰도록 카메라를 확대
+      this.cameras.main.setOrigin(0, 0).setZoom(RES);
 
       this.bg = this.add.graphics().setScrollFactor(0).setDepth(0);
       this.g = this.add.graphics().setDepth(1);
       this.emitter = this.add.particles(0, 0, 'dot', {
         speed: { min: 60, max: 260 }, lifespan: { min: 300, max: 700 },
-        scale: { start: 0.6, end: 0 }, alpha: { start: 1, end: 0 },
+        scale: { start: 0.2, end: 0 }, alpha: { start: 1, end: 0 },
         blendMode: 'ADD', emitting: false,
       }).setDepth(2);
 
@@ -160,7 +171,7 @@
       // 발광 효과(WebGL에서만)
       try {
         if (this.game.renderer.type === Phaser.WEBGL && this.cameras.main.postFX) {
-          this.cameras.main.postFX.addBloom(0xffffff, 1, 1, 1, 0.9, 4);
+          this.cameras.main.postFX.addBloom(0xffffff, 1, 1, 1, 0.55, 4);
         }
       } catch (e) { /* 효과 없이 진행 */ }
 
@@ -171,7 +182,7 @@
     buildUI() {
       const txt = (x, y, s, size, color) => this.add.text(x, y, s, {
         fontFamily: FONT, fontSize: size + 'px', color: color || '#ffffff', fontStyle: 'bold',
-        align: 'center', resolution: 2,
+        align: 'center', resolution: TEXT_RES,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(10);
 
       this.scoreText = txt(W / 2, 72, '0', 64);
@@ -205,7 +216,7 @@
 
     popup(x, y, msg, color) {
       const t = this.add.text(x, y, msg, {
-        fontFamily: FONT, fontSize: '26px', color: color || '#ffffff', fontStyle: 'bold', resolution: 2,
+        fontFamily: FONT, fontSize: '26px', color: color || '#ffffff', fontStyle: 'bold', resolution: TEXT_RES,
       }).setOrigin(0.5).setDepth(5);
       this.tweens.add({ targets: t, y: y - 50, alpha: 0, duration: 700, onComplete: () => t.destroy() });
     }
@@ -352,7 +363,7 @@
       this.time.delayedCall(350, () => {
         const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setScrollFactor(0).setDepth(9).setAlpha(0);
         const mk = (y, s, size, color) => this.add.text(W / 2, y, s, {
-          fontFamily: FONT, fontSize: size + 'px', color, fontStyle: 'bold', align: 'center', resolution: 2,
+          fontFamily: FONT, fontSize: size + 'px', color, fontStyle: 'bold', align: 'center', resolution: TEXT_RES,
         }).setOrigin(0.5).setScrollFactor(0).setDepth(10).setAlpha(0);
         const items = [
           dim,
@@ -546,7 +557,7 @@
     type: Phaser.AUTO,
     parent: 'game',
     backgroundColor: '#070b1a',
-    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: W, height: H },
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: W * RES, height: H * RES },
     audio: { noAudio: true },
     scene: [GameScene],
   });
