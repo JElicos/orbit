@@ -48,7 +48,8 @@
           '<button type="button" class="step" data-vol="1"' + (lv >= max ? ' disabled' : '') + '>+</button>' +
         '</div>' +
         '<p class="vol-label">' + (lv === 0 ? 'OFF' : lv + ' / ' + max) + '</p>' +
-        '<p class="note">Press M during play to mute or unmute quickly.</p>';
+        '<p class="note">Press M during play to mute or unmute quickly.</p>' +
+        '<p class="note ver">VERSION ' + O.VERSION + '</p>';
     },
 
     records() {

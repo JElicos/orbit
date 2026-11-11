@@ -9,6 +9,7 @@ window.ORBIT = (() => {
     history: 'orbitjump.history',
     stats: 'orbitjump.stats',
   };
+  const VERSION = '1.3';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
   const VOLUME_STEPS = 5;     // 0(끔) ~ 5
   const HISTORY_MAX = 10;
 
@@ -71,7 +72,7 @@ window.ORBIT = (() => {
   const valueOf = (id) => (id === 'score' ? getNum(KEY.best, 0) : loadStats()[id] || 0);
 
   return {
-    KEY, VOLUME_STEPS, HISTORY_MAX, ACHIEVEMENTS,
+    KEY, VERSION, VOLUME_STEPS, HISTORY_MAX, ACHIEVEMENTS,
     getNum, setNum, loadStats, saveStats, loadHistory, addHistory,
     achievement, tierOf, valueOf,
     sfx: null,   // game.js가 채웁니다
