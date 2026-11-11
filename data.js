@@ -5,11 +5,12 @@ window.ORBIT = (() => {
   const KEY = {
     best: 'orbitjump.best',
     bestCombo: 'orbitjump.bestCombo',
+    bestDist: 'orbitjump.bestDist',     // 가장 멀리 간 행성 번호(거리는 distanceAU로 환산)
     volume: 'orbitjump.volume',
     history: 'orbitjump.history',
     stats: 'orbitjump.stats',
   };
-  const VERSION = '1.7';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
+  const VERSION = '1.8';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
   const VOLUME_STEPS = 5;     // 0(끔) ~ 5
   const HISTORY_MAX = 10;
 
@@ -46,6 +47,7 @@ window.ORBIT = (() => {
       score: Number(e && e.score) || 0,
       combo: Number(e && e.combo) || 0,
       planets: Number(e && e.planets) || 0,
+      dist: e && Number.isFinite(Number(e.dist)) && e.dist !== null && e.dist !== undefined ? Number(e.dist) : -1,   // 예전 기록은 -1
       at: Number(e && e.at) || 0,
     }));
   };

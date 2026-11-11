@@ -35,6 +35,9 @@
     return pad(d.getMonth() + 1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   };
 
+  // 행성 번호를 "5.4 AU" 같은 거리 글자로
+  const distText = (index) => O.formatAU(O.distanceAU(index)) + ' AU';
+
   const render = {
     settings() {
       const lv = O.sfx.level, max = O.VOLUME_STEPS;
@@ -59,14 +62,16 @@
           '<div><span>BEST SCORE</span><b>' + O.getNum(O.KEY.best, 0) + '</b></div>' +
           '<div><span>BEST COMBO</span><b>x' + O.getNum(O.KEY.bestCombo, 0) + '</b></div>' +
         '</div>' +
+        '<div class="bests wide"><div><span>BEST DISTANCE</span><b>' + distText(O.getNum(O.KEY.bestDist, 0)) +
+          '</b><em>' + O.STAGES[O.stageOf(O.getNum(O.KEY.bestDist, 0))].name + '</em></div></div>' +
         '<h2>LAST ' + O.HISTORY_MAX + ' RUNS</h2>';
       if (!h.length) {
         html += '<p class="note">No runs yet. Play a round and it will show up here.</p>';
       } else {
-        html += '<table><thead><tr><th>#</th><th>SCORE</th><th>COMBO</th><th>PLANETS</th><th>WHEN</th></tr></thead><tbody>';
+        html += '<table><thead><tr><th>#</th><th>SCORE</th><th>COMBO</th><th>DISTANCE</th><th>WHEN</th></tr></thead><tbody>';
         h.forEach((e, i) => {
           html += '<tr><td>' + (i + 1) + '</td><td class="num">' + e.score + '</td><td>x' + e.combo +
-            '</td><td>' + e.planets + '</td><td class="dim">' + fmtDate(e.at) + '</td></tr>';
+            '</td><td>' + (e.dist >= 0 ? distText(e.dist) : '-') + '</td><td class="dim">' + fmtDate(e.at) + '</td></tr>';
         });
         html += '</tbody></table>';
       }

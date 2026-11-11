@@ -178,6 +178,9 @@
       this.stats = O.loadStats();                           // 행성 종류별 누적 착지 횟수
       this.scoreTier = O.tierOf(SCORE_TIERS, this.best);    // 이미 달성한 점수 도전과제 단계
       this.jumps = 0;                                       // 이번 시도에서 옮겨 탄 행성 수
+      this.bestIndex = O.getNum(O.KEY.bestDist, 0);         // 역대 가장 멀리 간 행성 번호
+      this.bestLineY = null;                                // 역대 최장 거리 위치(BEST 기록선)
+      this.recordShown = false;
       this.stage = 0;                                       // 현재 스테이지(0부터)
       this.prevStage = 0;                                   // 배경이 바뀌는 동안의 이전 스테이지
       this.themeMix = 1;                                    // 이전 -> 현재 배경 전환 진행도(0~1)
@@ -272,6 +275,14 @@
 
       this.toastText = txt(W / 2, top + 180, '', 22, '#ffffff').setAlpha(0);
 
+      // 현재 거리와 스테이지
+      this.distText = txt(W / 2, top + 118, '', 18, '#8fa3c8');
+      this.updateDist();
+      // BEST 기록선 옆 글자(게임 세계 안에 놓임)
+      this.bestLineLabel = this.add.text(12, 0, 'BEST  ' + this.distLabel(this.bestIndex), {
+        fontFamily: FONT, fontSize: '16px', color: '#ffd166', fontStyle: 'bold', resolution: TEXT_RES,
+      }).setOrigin(0, 1).setDepth(3).setAlpha(0.8).setVisible(false);
+
       // 스테이지 전환 배너
       this.bannerTop = txt(W / 2, H * 0.34, '', 22, '#8fa3c8').setLetterSpacing(8).setAlpha(0);
       this.bannerName = txt(W / 2, H * 0.34 + 48, '', 50, '#ffffff').setLetterSpacing(4).setAlpha(0);
@@ -286,10 +297,11 @@
       measureSafe();
       const top = SAFE.top, bottom = H - SAFE.bottom;
       this.scoreText.setY(top + 72);
-      this.comboText.setY(top + 128);
+      this.distText.setY(top + 118);
+      this.comboText.setY(top + 152);
       // 노치가 있는 기기는 상태 표시줄 바로 아래가 흐리게 처리되므로 조금 더 내림
       this.bestText.setY(top + (top > 0 ? 50 : 22));
-      this.toastText.setY(top + 180);
+      this.toastText.setY(top + 196);
       this.hintText.setY(bottom - 160);
       if (this.titleGroup[0]) this.titleGroup[0].setY(top + 220);
       if (this.titleGroup[1]) this.titleGroup[1].setY(bottom - 80);
@@ -302,6 +314,13 @@
       this.toastText.setText(msg).setColor(color || '#ffffff').setAlpha(1);
       this.tweens.killTweensOf(this.toastText);
       this.tweens.add({ targets: this.toastText, alpha: 0, delay: 1300, duration: 500 });
+    }
+
+    // 행성 번호를 "5.4 AU" 같은 거리 글자로
+    distLabel(index) { return O.formatAU(O.distanceAU(index)) + ' AU'; }
+
+    updateDist() {
+      this.distText.setText(this.distLabel(this.maxIndex) + '  ·  ' + O.STAGES[O.stageOf(this.maxIndex)].name);
     }
 
     showBanner(stage) {
@@ -363,6 +382,8 @@
         p.baseX = clamp(prev.baseX + rnd(-230, 230), margin, W - margin);
         p.x = p.baseX;
         p.y = prev.y - rnd(200 + d * 1.5, 260 + d * 2.5);
+        // 역대 최장 기록 행성과 그다음 행성 사이에 기록선을 둠
+        if (this.bestIndex >= 1 && i === this.bestIndex + 1) this.bestLineY = (prev.y + p.y) / 2;
 
         // 두 행성 사이의 별(고정 행성 사이에만)
         if (i >= 2 && p.type !== 'moving' && prev.type !== 'moving' && Math.random() < 0.55) {
@@ -442,6 +463,12 @@
         if (lv >= 0) this.achieved(ach.name, lv + 1);
         const stage = O.stageOf(p.index);
         if (stage !== this.stage) this.enterStage(stage);
+        this.updateDist();
+        if (this.bestIndex >= 1 && p.index > this.bestIndex && !this.recordShown) {
+          this.recordShown = true;
+          this.toast('NEW DISTANCE RECORD', '#ffd166');
+          Sfx.achieve();
+        }
       } else {
         this.combo = 0;   // 이미 지난 행성으로 돌아가면 점수 없음
       }
@@ -476,10 +503,13 @@
       const newBest = this.score > this.best;
       if (newBest) { this.best = this.score; O.setNum(O.KEY.best, this.best); }
       if (this.maxCombo > this.bestCombo) { this.bestCombo = this.maxCombo; O.setNum(O.KEY.bestCombo, this.bestCombo); }
-      O.addHistory({ score: this.score, combo: this.maxCombo, planets: this.jumps, at: Date.now() });
+      const newDist = this.maxIndex > this.bestIndex;
+      if (newDist) { this.bestIndex = this.maxIndex; O.setNum(O.KEY.bestDist, this.bestIndex); }
+      O.addHistory({ score: this.score, combo: this.maxCombo, planets: this.jumps, dist: this.maxIndex, at: Date.now() });
 
       this.time.delayedCall(350, () => {
-        const mid = H / 2 - 140;   // 게임 오버 글자 묶음의 맨 윗줄
+        const mid = H / 2 - 190;   // 게임 오버 글자 묶음의 맨 윗줄
+        this.distText.setVisible(false);
         const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setScrollFactor(0).setDepth(9).setAlpha(0);
         const mk = (y, s, size, color) => this.add.text(W / 2, y, s, {
           fontFamily: FONT, fontSize: size + 'px', color, fontStyle: 'bold', align: 'center', resolution: TEXT_RES,
@@ -488,9 +518,11 @@
           dim,
           mk(mid, 'GAME OVER', 58, '#ffffff'),
           mk(mid + 90, 'SCORE ' + this.score, 40, '#ffffff'),
-          mk(mid + 150, newBest ? 'NEW BEST!' : 'BEST ' + this.best, 24, newBest ? '#ffd166' : '#8fa3c8'),
-          mk(mid + 190, 'MAX COMBO x' + this.maxCombo + '  ·  ALL-TIME x' + this.bestCombo, 20, '#8fa3c8'),
-          mk(mid + 300, this.isTouch() ? 'TAP TO RETRY' : 'SPACE / CLICK TO RETRY', 22, '#cfe3ff'),
+          mk(mid + 138, newBest ? 'NEW BEST!' : 'BEST ' + this.best, 22, newBest ? '#ffd166' : '#8fa3c8'),
+          mk(mid + 196, this.distLabel(this.maxIndex) + '  ·  ' + O.STAGES[O.stageOf(this.maxIndex)].name, 28, '#ffffff'),
+          mk(mid + 234, newDist ? 'NEW DISTANCE RECORD!' : 'FARTHEST ' + this.distLabel(this.bestIndex), 20, newDist ? '#ffd166' : '#8fa3c8'),
+          mk(mid + 280, 'MAX COMBO x' + this.maxCombo + '  ·  ALL-TIME x' + this.bestCombo, 20, '#8fa3c8'),
+          mk(mid + 370, this.isTouch() ? 'TAP TO RETRY' : 'SPACE / CLICK TO RETRY', 22, '#cfe3ff'),
         ];
         this.scoreText.setVisible(false); this.comboText.setVisible(false);
         this.tweens.add({ targets: items, alpha: { from: 0, to: 1 }, duration: 250 });
@@ -843,6 +875,13 @@
           g.lineStyle(3, 0xffffff, 0.6);
           g.beginPath(); g.arc(p.x, p.y, p.r * 0.55, this.t * 3, this.t * 3 + 4, false); g.strokePath();
         }
+      }
+
+      // BEST 기록선(역대 최장 거리 위치)
+      if (this.bestLineY !== null) {
+        g.lineStyle(2, C.star, 0.55);
+        for (let x = 0; x < W; x += 22) g.lineBetween(x, this.bestLineY, x + 11, this.bestLineY);
+        this.bestLineLabel.setVisible(true).setY(this.bestLineY - 5);
       }
 
       // 포획 파동
