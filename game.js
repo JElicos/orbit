@@ -5,28 +5,49 @@
   const W = 540, TAU = Math.PI * 2;
 
   // 화면 크기. 아이폰 홈 화면에서 실행하면 화면 전체(노치 영역 포함)를 씁니다.
+  const STANDALONE = !!window.navigator.standalone && !!window.screen &&
+    (window.innerHeight || 0) >= (window.innerWidth || 0);
   const VIEW = (() => {
     let vw = window.innerWidth || W, vh = window.innerHeight || 960;
-    if (window.navigator.standalone && window.screen && vh >= vw) {
+    if (STANDALONE) {
       vw = Math.min(screen.width, screen.height);
       vh = Math.max(screen.width, screen.height);
     }
     return { vw, vh };
   })();
+  // 아이폰 홈 화면 앱은 페이지 높이를 상태 표시줄만큼 짧게 알려줘서 아래쪽이 비는 문제가 있습니다.
+  // 게임 영역 높이를 실제 화면 높이로 직접 지정해 맨 아래까지 채웁니다.
+  if (STANDALONE) {
+    const el = document.getElementById('game');
+    el.style.bottom = 'auto';
+    el.style.height = VIEW.vh + 'px';
+  }
   // 게임 높이: 기본 960, 세로로 긴 화면에서는 위아래 빈 띠 없이 꽉 차도록 늘림
   const H = Math.max(960, Math.min(1300, Math.round(W * VIEW.vh / VIEW.vw)));
   // 노치와 홈 표시줄 높이(게임 좌표 단위)
-  const SAFE = (() => {
+  const SAFE = { top: 0, bottom: 0 };
+  // 여백을 다시 재고, 값이 바뀌었으면 true를 돌려줍니다.
+  function measureSafe() {
     const probe = document.createElement('div');
     probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;' +
       'padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
     document.body.appendChild(probe);
     const cs = getComputedStyle(probe);
-    const top = parseFloat(cs.paddingTop) || 0, bottom = parseFloat(cs.paddingBottom) || 0;
+    let top = parseFloat(cs.paddingTop) || 0, bottom = parseFloat(cs.paddingBottom) || 0;
     probe.remove();
+    if (STANDALONE) {
+      // 아이폰 홈 화면 앱은 시작 직후 여백을 0으로 알려줄 때가 있어, 화면과 페이지의 높이 차이로 보완
+      const gap = VIEW.vh - (window.innerHeight || VIEW.vh);
+      if (!top && gap > 0) top = gap;
+      if (!bottom && top > 24) bottom = 34;   // 홈 표시줄이 있는 기종
+    }
     const unit = W / Math.min(VIEW.vw, VIEW.vh * W / H);
-    return { top: top * unit, bottom: bottom * unit };
-  })();
+    const t = top * unit, b = bottom * unit;
+    const changed = Math.abs(t - SAFE.top) > 1 || Math.abs(b - SAFE.bottom) > 1;
+    SAFE.top = t; SAFE.bottom = b;
+    return changed;
+  }
+  measureSafe();
   const FLY_SPEED = 640;        // 발사 후 비행 속도(px/s)
   const BALL_R = 9;
   const STAR_PICK_R = 26;       // 별 획득 반경
@@ -223,6 +244,23 @@
       this.tweens.add({ targets: this.hintText, alpha: 0.35, duration: 700, yoyo: true, repeat: -1 });
 
       this.toastText = txt(W / 2, top + 180, '', 22, '#ffffff').setAlpha(0);
+
+      // 여백 값이 늦게 확정되는 기기를 위해 잠시 뒤 다시 재서 위치를 맞춤
+      this.layoutUI();
+      [300, 1200].forEach((ms) => this.time.delayedCall(ms, () => this.layoutUI()));
+    }
+
+    // 점수와 안내 문구를 노치와 홈 표시줄 안쪽에 배치
+    layoutUI() {
+      measureSafe();
+      const top = SAFE.top, bottom = H - SAFE.bottom;
+      this.scoreText.setY(top + 72);
+      this.comboText.setY(top + 128);
+      this.bestText.setY(top + 22);
+      this.toastText.setY(top + 180);
+      this.hintText.setY(bottom - 160);
+      if (this.titleGroup[0]) this.titleGroup[0].setY(top + 220);
+      if (this.titleGroup[1]) this.titleGroup[1].setY(bottom - 80);
     }
 
     // 휴대폰이나 태블릿이면 키보드 안내 대신 터치 안내를 보여줌
