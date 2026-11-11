@@ -2,7 +2,31 @@
   'use strict';
 
   // ---------- 조정값 ----------
-  const W = 540, H = 960, TAU = Math.PI * 2;
+  const W = 540, TAU = Math.PI * 2;
+
+  // 화면 크기. 아이폰 홈 화면에서 실행하면 화면 전체(노치 영역 포함)를 씁니다.
+  const VIEW = (() => {
+    let vw = window.innerWidth || W, vh = window.innerHeight || 960;
+    if (window.navigator.standalone && window.screen && vh >= vw) {
+      vw = Math.min(screen.width, screen.height);
+      vh = Math.max(screen.width, screen.height);
+    }
+    return { vw, vh };
+  })();
+  // 게임 높이: 기본 960, 세로로 긴 화면에서는 위아래 빈 띠 없이 꽉 차도록 늘림
+  const H = Math.max(960, Math.min(1300, Math.round(W * VIEW.vh / VIEW.vw)));
+  // 노치와 홈 표시줄 높이(게임 좌표 단위)
+  const SAFE = (() => {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;' +
+      'padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const top = parseFloat(cs.paddingTop) || 0, bottom = parseFloat(cs.paddingBottom) || 0;
+    probe.remove();
+    const unit = W / Math.min(VIEW.vw, VIEW.vh * W / H);
+    return { top: top * unit, bottom: bottom * unit };
+  })();
   const FLY_SPEED = 640;        // 발사 후 비행 속도(px/s)
   const BALL_R = 9;
   const STAR_PICK_R = 26;       // 별 획득 반경
@@ -32,7 +56,7 @@
   // 렌더링 배율: 화면의 실제 픽셀 수에 맞춰 1~3배로 그림(게임 속 좌표는 540x960 그대로)
   const RES = (() => {
     const dpr = window.devicePixelRatio || 1;
-    const fit = Math.min(window.innerWidth / W, window.innerHeight / H) * dpr;
+    const fit = Math.min(VIEW.vw / W, VIEW.vh / H) * dpr;
     return clamp(Math.ceil((fit || 1) * 2) / 2, 1, 3);
   })();
   const TEXT_RES = Math.max(2, Math.ceil(RES));
@@ -155,7 +179,7 @@
         planet: p0, left: null, angle: -Math.PI / 2, dir: 1, orbR: p0.orbitR, swept: TAU,
       };
       this.camY = p0.y - H * CAM_ANCHOR;
-      this.lavaY = p0.y + 520;
+      this.lavaY = p0.y + H * (1 - CAM_ANCHOR) + 184;   // 화면 아래쪽 바깥에서 시작
       while (this.topPlanet().y > this.camY - 400) this.spawnPlanet();
 
       this.buildUI();
@@ -185,19 +209,20 @@
         align: 'center', resolution: TEXT_RES,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(10);
 
-      this.scoreText = txt(W / 2, 72, '0', 64);
-      this.comboText = txt(W / 2, 128, '', 26, '#ffd166').setVisible(false);
-      this.bestText = txt(16, 22, 'BEST ' + this.best, 18, '#8fa3c8').setOrigin(0, 0.5);
+      const top = SAFE.top, bottom = H - SAFE.bottom;   // 노치와 홈 표시줄을 피한 기준선
+      this.scoreText = txt(W / 2, top + 72, '0', 64);
+      this.comboText = txt(W / 2, top + 128, '', 26, '#ffd166').setVisible(false);
+      this.bestText = txt(16, top + 22, 'BEST ' + this.best, 18, '#8fa3c8').setOrigin(0, 0.5);
 
       this.titleGroup = [];
       if (!seenTitle) {
-        this.titleGroup.push(txt(W / 2, 220, 'ORBIT', 84).setLetterSpacing(14));
-        if (!this.isTouch()) this.titleGroup.push(txt(W / 2, 880, 'M : MUTE     ESC : MENU', 16, '#8fa3c8'));
+        this.titleGroup.push(txt(W / 2, top + 220, 'ORBIT', 84).setLetterSpacing(14));
+        if (!this.isTouch()) this.titleGroup.push(txt(W / 2, bottom - 80, 'M : MUTE     ESC : MENU', 16, '#8fa3c8'));
       }
-      this.hintText = txt(W / 2, 800, this.isTouch() ? 'TAP TO LAUNCH' : 'SPACE / CLICK TO LAUNCH', 22, '#cfe3ff');
+      this.hintText = txt(W / 2, bottom - 160, this.isTouch() ? 'TAP TO LAUNCH' : 'SPACE / CLICK TO LAUNCH', 22, '#cfe3ff');
       this.tweens.add({ targets: this.hintText, alpha: 0.35, duration: 700, yoyo: true, repeat: -1 });
 
-      this.toastText = txt(W / 2, 180, '', 22, '#ffffff').setAlpha(0);
+      this.toastText = txt(W / 2, top + 180, '', 22, '#ffffff').setAlpha(0);
     }
 
     // 휴대폰이나 태블릿이면 키보드 안내 대신 터치 안내를 보여줌
@@ -361,17 +386,18 @@
       O.addHistory({ score: this.score, combo: this.maxCombo, planets: this.jumps, at: Date.now() });
 
       this.time.delayedCall(350, () => {
+        const mid = H / 2 - 140;   // 게임 오버 글자 묶음의 맨 윗줄
         const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setScrollFactor(0).setDepth(9).setAlpha(0);
         const mk = (y, s, size, color) => this.add.text(W / 2, y, s, {
           fontFamily: FONT, fontSize: size + 'px', color, fontStyle: 'bold', align: 'center', resolution: TEXT_RES,
         }).setOrigin(0.5).setScrollFactor(0).setDepth(10).setAlpha(0);
         const items = [
           dim,
-          mk(340, 'GAME OVER', 58, '#ffffff'),
-          mk(430, 'SCORE ' + this.score, 40, '#ffffff'),
-          mk(490, newBest ? 'NEW BEST!' : 'BEST ' + this.best, 24, newBest ? '#ffd166' : '#8fa3c8'),
-          mk(530, 'MAX COMBO x' + this.maxCombo + '  ·  ALL-TIME x' + this.bestCombo, 20, '#8fa3c8'),
-          mk(640, this.isTouch() ? 'TAP TO RETRY' : 'SPACE / CLICK TO RETRY', 22, '#cfe3ff'),
+          mk(mid, 'GAME OVER', 58, '#ffffff'),
+          mk(mid + 90, 'SCORE ' + this.score, 40, '#ffffff'),
+          mk(mid + 150, newBest ? 'NEW BEST!' : 'BEST ' + this.best, 24, newBest ? '#ffd166' : '#8fa3c8'),
+          mk(mid + 190, 'MAX COMBO x' + this.maxCombo + '  ·  ALL-TIME x' + this.bestCombo, 20, '#8fa3c8'),
+          mk(mid + 300, this.isTouch() ? 'TAP TO RETRY' : 'SPACE / CLICK TO RETRY', 22, '#cfe3ff'),
         ];
         this.scoreText.setVisible(false); this.comboText.setVisible(false);
         this.tweens.add({ targets: items, alpha: { from: 0, to: 1 }, duration: 250 });
