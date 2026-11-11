@@ -112,6 +112,9 @@
         '</div>' +
         '<p class="vol-label">' + (lv === 0 ? 'OFF' : lv + ' / ' + max) + '</p>' +
         '<p class="note">Press M during play to mute or unmute quickly.</p>' +
+        '<h2 class="gap">DISPLAY</h2>' +
+        '<button type="button" class="toggle' + (O.getNum(O.KEY.showFps, 0) === 1 ? ' on' : '') +
+          '" data-toggle="showFps" tabindex="-1"><span>SHOW FPS</span><i></i></button>' +
         '<p class="note ver">VERSION ' + O.VERSION + '</p>';
     },
 
@@ -200,6 +203,16 @@
       O.sfx.setVolume(O.sfx.level + Number(btn.dataset.vol));
       O.sfx.capture(1);              // 바뀐 크기로 미리 듣기
       render.settings();
+      return;
+    }
+    const toggle = e.target.closest('[data-toggle]');
+    if (toggle) {
+      const key = O.KEY[toggle.dataset.toggle];
+      O.setNum(key, O.getNum(key, 0) === 1 ? 0 : 1);
+      render.settings();
+      const scene = game.scene.getScene('game');
+      if (scene && scene.applySettings) scene.applySettings();
+      blur();
       return;
     }
     const card = e.target.closest('[data-item]');

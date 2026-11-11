@@ -291,6 +291,11 @@
       // 보유 별
       this.starText = txt(16, top + 48, '', 18, '#ffd166').setOrigin(0, 0.5);
       this.applyStyle();
+      // 초당 프레임 수(SETTINGS에서 켬)
+      this.fpsText = txt(16, top + 74, '', 15, '#8fa3c8').setOrigin(0, 0.5);
+      this.fpsMs = 0;
+      this.fpsFrames = 0;
+      this.applySettings();
 
       // 현재 거리와 스테이지
       this.distText = txt(W / 2, top + 118, '', 18, '#8fa3c8');
@@ -319,6 +324,7 @@
       // 노치가 있는 기기는 상태 표시줄 바로 아래가 흐리게 처리되므로 조금 더 내림
       this.bestText.setY(top + (top > 0 ? 50 : 22));
       this.starText.setY(top + (top > 0 ? 76 : 48));
+      this.fpsText.setY(top + (top > 0 ? 102 : 74));
       this.toastText.setY(top + 196);
       this.hintText.setY(bottom - 160);
       if (this.titleGroup[0]) this.titleGroup[0].setY(top + 220);
@@ -345,6 +351,25 @@
       this.ballColor = parseInt(eq.ball.color.slice(1), 16);
       this.trailStyle = eq.trail.id;
       this.updateStars();
+    }
+
+    // SETTINGS에서 바꾼 표시 설정을 적용(ui.js가 다시 부름)
+    applySettings() {
+      this.showFps = O.getNum(O.KEY.showFps, 0) === 1;
+      this.fpsText.setVisible(this.showFps);
+      this.fpsMs = 0;
+      this.fpsFrames = 0;
+    }
+
+    // 0.5초마다 평균 프레임 수를 갱신. 낮을수록 주황, 빨강으로 표시.
+    updateFps(delta) {
+      this.fpsMs += delta;
+      this.fpsFrames++;
+      if (this.fpsMs < 500) return;
+      const fps = Math.round(this.fpsFrames * 1000 / this.fpsMs);
+      this.fpsText.setText(fps + ' FPS').setColor(fps >= 55 ? '#8fa3c8' : fps >= 30 ? '#ff9a3c' : '#ff5d5d');
+      this.fpsMs = 0;
+      this.fpsFrames = 0;
     }
 
     updateDist() {
@@ -621,6 +646,7 @@
     update(time, delta) {
       const dt = Math.min(delta, 33) / 1000;
       this.t += dt;
+      if (this.showFps) this.updateFps(delta);
       const b = this.ball;
 
       for (const p of this.planets) {

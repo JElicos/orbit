@@ -100,6 +100,21 @@
   .vbars { display: flex; align-items: flex-end; gap: .5em; height: 2.6em; padding-bottom: .65em; }
   .vbar { width: 1em; border-radius: .2em; background: rgba(143,163,200,.25); }
   .vbar.on { background: #4cc9f0; }
+  #tabBody h2.gap { margin-top: 2.6em; }
+  #ui .toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    padding: .9em 1em; border: 1px solid rgba(143,163,200,.3); border-radius: .6em;
+    font-weight: 700; letter-spacing: .1em;
+  }
+  .toggle i {
+    position: relative; width: 2.6em; height: 1.4em; border-radius: 1em; background: rgba(143,163,200,.3);
+  }
+  .toggle i::after {
+    content: ''; position: absolute; top: .2em; left: .2em; width: 1em; height: 1em;
+    border-radius: 50%; background: #e8f0ff; transition: left .15s;
+  }
+  .toggle.on i { background: #4cc9f0; }
+  .toggle.on i::after { left: 1.4em; }
   .note.ver { margin-top: 3em; font-size: .8em; letter-spacing: .14em; opacity: .7; }
   .vol-label { text-align: center; font-size: 1.5em; font-weight: 700; margin: 1em 0 2.5em; }
 
