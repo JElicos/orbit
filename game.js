@@ -50,6 +50,9 @@
   const BALL_R = 9;
   const STAR_PICK_R = 26;       // 별 획득 반경
   const STAR_SCORE = 2;
+  const HOLE_R = 20;            // 블랙홀의 검은 원 반경
+  const HOLE_KILL = 26;         // 이 거리 안으로 들어오면 게임 오버(안쪽 고리까지)
+  const HOLE_FROM_STAGE = 4;    // 블랙홀이 나오기 시작하는 스테이지(0부터, 4 = SATURN)
   const CAM_ANCHOR = 0.65;      // 현재 행성이 화면 세로의 이 위치에 오도록
   const FONT = 'Bahnschrift, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
 
@@ -64,6 +67,7 @@
     lava: 0xff3355,
   };
   const TYPE_HINT = {
+    hole: 'BLACK HOLE - DON\'T TOUCH',
     moving: 'MOVING PLANET',
     shrink: 'SHRINKING ORBIT - JUMP FAST!',
     reverse: 'REVERSE SPIN',
@@ -150,6 +154,7 @@
     star() { this.tone(1320, 1760, 0.12, 'sine', 0.6); this.tone(1976, 1976, 0.15, 'sine', 0.4, 0.07); },
     die() { this.tone(300, 50, 0.5, 'sawtooth', 0.6); this.tone(90, 40, 0.5, 'square', 0.4); },
     achieve() { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, f, 0.16, 'triangle', 0.5, 0.12 + i * 0.07)); },
+    swallow() { this.tone(420, 36, 0.7, 'sine', 0.8); this.tone(210, 30, 0.7, 'triangle', 0.4, 0.05); },
     stage() { [392, 523, 659, 784].forEach((f, i) => this.tone(f, f, 0.5, 'sine', 0.45, i * 0.09)); },
   };
   O.sfx = Sfx;
@@ -186,6 +191,8 @@
       this.themeMix = 1;                                    // 이전 -> 현재 배경 전환 진행도(0~1)
 
       this.planets = [];
+      this.holes = [];            // 블랙홀
+      this.suck = null;           // 블랙홀에 빨려 들어가는 연출 상태
       this.stars = [];
       this.rings = [];
       this.trail = [];
@@ -392,8 +399,29 @@
           const off = rnd(-40, 40);
           this.stars.push({ x: clamp(mx - dy / len * off, 20, W - 20), y: my + dx / len * off, taken: false });
         }
+
+        // 블랙홀: 일정 스테이지부터, 멀리 갈수록 자주(고정 행성 사이에만)
+        const stage = O.stageOf(i);
+        if (stage >= HOLE_FROM_STAGE && p.type !== 'moving' && prev.type !== 'moving' &&
+            Math.random() < 0.22 + (stage - HOLE_FROM_STAGE) * 0.04) this.spawnHole(prev, p);   // 자리가 없으면 생략되므로 실제 빈도는 이보다 낮음
       }
       this.planets.push(p);
+    }
+
+    // 두 행성 사이 옆쪽에 블랙홀을 둠.
+    // 다음 행성에 닿는 발사 경로는 모두 두 행성을 잇는 선에서 궤도 반경 이내를 지나므로,
+    // 그 통로 밖에 두면 정확히 쏜 공은 절대 닿지 않습니다.
+    spawnHole(a, b) {
+      const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const off = Math.max(a.orbitR, b.orbitR) + HOLE_KILL + BALL_R + 12 + rnd(0, 36);
+      for (const side of (Math.random() < 0.5 ? [1, -1] : [-1, 1])) {
+        const x = mx + nx * off * side, y = my + ny * off * side;
+        if (x < HOLE_R + 14 || x > W - HOLE_R - 14) continue;   // 화면 밖으로 나가면 반대쪽 시도
+        this.holes.push({ x, y });
+        return;
+      }
     }
 
     // ----- 입력 -----
@@ -490,15 +518,23 @@
       this.tweens.add({ targets: this.scoreText, scale: 1, duration: 180 });
     }
 
-    die() {
+    // hole: 블랙홀에 닿아 죽은 경우 그 블랙홀
+    die(hole) {
       if (this.state === 'dead') return;
       const b = this.ball;
       this.state = 'dead';
       this.deadAt = this.t;
-      this.emitter.setParticleTint(0xffffff);
-      this.emitter.explode(40, clamp(b.x, 0, W), clamp(b.y, this.camY, this.camY + H));
-      this.cameras.main.shake(300, 0.012);
-      Sfx.die();
+      if (hole) {
+        // 폭발 대신 공이 블랙홀 중심으로 빨려 들어가며 사라짐
+        this.suck = { x: b.x, y: b.y, hole, k: 0 };
+        this.cameras.main.shake(220, 0.006);
+        Sfx.swallow();
+      } else {
+        this.emitter.setParticleTint(0xffffff);
+        this.emitter.explode(40, clamp(b.x, 0, W), clamp(b.y, this.camY, this.camY + H));
+        this.cameras.main.shake(300, 0.012);
+        Sfx.die();
+      }
 
       const newBest = this.score > this.best;
       if (newBest) { this.best = this.score; O.setNum(O.KEY.best, this.best); }
@@ -570,8 +606,18 @@
               Sfx.star();
             }
           }
+          for (const h of this.holes) {
+            if (Math.hypot(b.x - h.x, b.y - h.y) <= HOLE_KILL) { this.die(h); break; }
+          }
           if (b.x < -30 || b.x > W + 30 || b.y > this.camY + H + 30 || b.y < this.camY - 200) this.die();
         }
+      }
+
+      if (this.suck && this.suck.k < 1) this.suck.k = Math.min(1, this.suck.k + dt / 0.45);
+      // 블랙홀이 처음 화면에 들어오면 한 번 안내
+      if (!seenTypes.has('hole') && this.holes.some((h) => h.y > this.camY + 60)) {
+        seenTypes.add('hole');
+        this.toast(TYPE_HINT.hole, '#ff9a3c');
       }
 
       if (this.state !== 'dead') {
@@ -602,6 +648,7 @@
       const cut = this.camY + H + 200;
       if (this.planets[0].y > cut && this.planets[0] !== b.planet && this.planets[0] !== b.left) this.planets.shift();
       if (this.stars.length && this.stars[0].y > cut) this.stars.shift();
+      if (this.holes.length && this.holes[0].y > cut) this.holes.shift();
 
       if (this.themeMix < 1) this.themeMix = Math.min(1, this.themeMix + dt / 2.5);
 
@@ -847,6 +894,23 @@
         g.fillTriangle(s.x + k, s.y, s.x, s.y - k * 0.45, s.x, s.y + k * 0.45);
       }
 
+      // 블랙홀: 주황빛 번짐, 회전하는 강착원반, 검은 원
+      for (const h of this.holes) {
+        g.fillStyle(0xff8a2a, 0.05);
+        for (let k = 0; k < 4; k++) g.fillCircle(h.x, h.y, HOLE_R + 26 - k * 5);
+        for (let k = 0; k < 3; k++) {
+          const a0 = this.t * (2.4 - k * 0.6) + k * 2.1;
+          g.lineStyle(4 - k, k === 0 ? 0xffd9a0 : 0xff9a3c, 0.85 - k * 0.2);
+          g.beginPath();
+          g.arc(h.x, h.y, HOLE_R + 5 + k * 6, a0, a0 + 3.6, false);
+          g.strokePath();
+        }
+        g.fillStyle(0x000000, 1);
+        g.fillCircle(h.x, h.y, HOLE_R);
+        g.lineStyle(1.5, 0xffe8c8, 0.9);
+        g.strokeCircle(h.x, h.y, HOLE_R);
+      }
+
       // 행성
       for (const p of this.planets) {
         const color = C[p.type];
@@ -910,6 +974,10 @@
       if (this.state !== 'dead') {
         g.fillStyle(C.ball, 1);
         g.fillCircle(b.x, b.y, BALL_R);
+      } else if (this.suck && this.suck.k < 1) {
+        const s = this.suck, k = s.k * s.k;   // 중심으로 갈수록 빨라짐
+        g.fillStyle(C.ball, 1);
+        g.fillCircle(lerp(s.x, s.hole.x, k), lerp(s.y, s.hole.y, k), BALL_R * (1 - s.k));
       }
 
       // 경계선
