@@ -9,7 +9,7 @@ window.ORBIT = (() => {
     history: 'orbitjump.history',
     stats: 'orbitjump.stats',
   };
-  const VERSION = '1.5';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
+  const VERSION = '1.6';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
   const VOLUME_STEPS = 5;     // 0(끔) ~ 5
   const HISTORY_MAX = 10;
 

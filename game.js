@@ -254,7 +254,8 @@
       const top = SAFE.top, bottom = H - SAFE.bottom;
       this.scoreText.setY(top + 72);
       this.comboText.setY(top + 128);
-      this.bestText.setY(top + 22);
+      // 노치가 있는 기기는 상태 표시줄 바로 아래가 흐리게 처리되므로 조금 더 내림
+      this.bestText.setY(top + (top > 0 ? 50 : 22));
       this.toastText.setY(top + 180);
       this.hintText.setY(bottom - 160);
       if (this.titleGroup[0]) this.titleGroup[0].setY(top + 220);
