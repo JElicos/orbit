@@ -53,7 +53,7 @@
   }
 
   // 켜고 끄는 설정. 저장된 값이 없을 때의 기본값: 발광 효과는 PC에서만 켬.
-  const toggleDefault = (name) => (name === 'glow' && !O.isMobile ? 1 : 0);
+  const toggleDefault = (name) => (name === 'shake' || (name === 'glow' && !O.isMobile) ? 1 : 0);
   const toggleOn = (name) => O.getNum(O.KEY[name], toggleDefault(name)) === 1;
   const toggleRow = (name, label) =>
     '<button type="button" class="toggle' + (toggleOn(name) ? ' on' : '') + '" data-toggle="' + name +
@@ -122,6 +122,8 @@
         '<h2 class="gap">DISPLAY</h2>' +
         toggleRow('glow', 'GLOW EFFECT') +
         '<p class="note small">Soft light bloom over the whole screen. Looks nicer but is slow on phones.</p>' +
+        toggleRow('shake', 'SCREEN SHAKE') +
+        '<p class="note small">Shakes the screen when a run ends.</p>' +
         toggleRow('showFps', 'SHOW FPS') +
         '<p class="note ver">VERSION ' + O.VERSION + '</p>';
     },

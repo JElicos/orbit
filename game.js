@@ -594,6 +594,7 @@
 
     // SETTINGS에서 바꾼 표시 설정을 적용(ui.js가 다시 부름)
     applySettings() {
+      this.shakeOn = O.getNum(O.KEY.shake, 1) === 1;   // 게임 오버 때 화면 흔들림
       this.showFps = O.getNum(O.KEY.showFps, 0) === 1;
       this.fpsText.setVisible(this.showFps);
       this.fpsMs = 0;
@@ -842,12 +843,12 @@
       if (hole) {
         // 폭발 대신 공이 블랙홀 중심으로 빨려 들어가며 사라짐
         this.suck = { x: b.x, y: b.y, hole, k: 0 };
-        this.cameras.main.shake(220, 0.006);
+        if (this.shakeOn) this.cameras.main.shake(220, 0.006);
         Sfx.swallow();
       } else {
         this.emitter.setParticleTint(0xffffff);
         this.emitter.explode(40, clamp(b.x, 0, W), clamp(b.y, this.camY, this.camY + H));
-        this.cameras.main.shake(300, 0.012);
+        if (this.shakeOn) this.cameras.main.shake(300, 0.012);
         Sfx.die();
       }
 
