@@ -76,7 +76,7 @@
   .panel-head { display: flex; align-items: stretch; gap: .5em; border-bottom: 1px solid rgba(143,163,200,.3); }
   .tabs { display: flex; flex: 1; min-width: 0; }
   .tab {
-    flex: 1 1 auto; padding: .9em .3em .8em; font-size: .95em; font-weight: 700; letter-spacing: .08em;
+    flex: 1 1 auto; padding: 1em .15em .9em; font-size: .74em; font-weight: 700; letter-spacing: .05em;
     color: #8fa3c8; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap;
   }
   #ui .tab { color: #8fa3c8; border-bottom: 3px solid transparent; }
@@ -118,6 +118,31 @@
   td.num { font-weight: 700; color: #fff; }
   td.dim { color: #8fa3c8; font-size: .9em; }
 
+  /* CUSTOMIZE */
+  .wallet {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: .8em 1em; border: 1px solid rgba(255,209,102,.4); border-radius: .6em;
+  }
+  .wallet span { font-size: .8em; letter-spacing: .14em; color: #8fa3c8; }
+  .wallet b { font-size: 1.6em; color: #ffd166; }
+  .shopnote { margin: .8em 0 1.4em; font-size: .9em; line-height: 1.4; color: #cfe3ff; min-height: 1.4em; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6em; margin-bottom: 1.8em; }
+  #ui .item {
+    display: flex; flex-direction: column; align-items: center; gap: .3em;
+    padding: .8em .2em .7em; border: 1px solid rgba(143,163,200,.3); border-radius: .6em;
+  }
+  #ui .item.equipped { border-color: #4cc9f0; background: rgba(76,201,240,.14); }
+  #ui .item.confirm { border-color: #ffd166; background: rgba(255,209,102,.14); }
+  #ui .item.locked, #ui .item.poor { opacity: .5; }
+  .swatch { display: flex; align-items: center; justify-content: center; height: 1.7em; }
+  .swatch i { display: inline-block; border-radius: 50%; margin: 0 .04em; flex: none; }
+  .ballsw { width: 1.3em; height: 1.3em; }
+  .ballsw.small { width: .8em; height: .8em; margin-left: .1em; }
+  .item-name { font-size: .85em; font-weight: 700; letter-spacing: .08em; }
+  .item-status { font-size: .68em; letter-spacing: .06em; color: #8fa3c8; }
+  .item.buyable .item-status, .item.confirm .item-status { color: #ffd166; }
+  .item.equipped .item-status { color: #4cc9f0; }
+
   /* ACHIEVEMENTS */
   .ach { padding: 1em 0 1.15em; border-top: 1px solid rgba(143,163,200,.16); }
   .ach:first-child { border-top: 0; padding-top: 0; }
@@ -141,6 +166,7 @@
         <button type="button" class="tab" data-tab="settings" tabindex="-1">SETTINGS</button>
         <button type="button" class="tab" data-tab="records" tabindex="-1">RECORDS</button>
         <button type="button" class="tab" data-tab="achievements" tabindex="-1">ACHIEVEMENTS</button>
+        <button type="button" class="tab" data-tab="customize" tabindex="-1">CUSTOMIZE</button>
       </div>
       <button id="closeBtn" type="button" tabindex="-1" aria-label="Close">&times;</button>
     </div>

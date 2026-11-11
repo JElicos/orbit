@@ -52,7 +52,53 @@
     tabs.forEach((t) => t.classList.toggle('has-new', on && t.dataset.tab === 'achievements'));
   }
 
+  let pendingBuy = null;   // 구매 확인을 기다리는 항목 id
+  let shopNote = '';       // 꾸미기 탭 위쪽 안내 문구
+
+  // 궤적 미리보기: 점 여러 개로 각 궤적의 느낌을 표현(오른쪽이 공 쪽)
+  function trailSwatch(id, ballColor) {
+    const dot = (size, bg, extra) =>
+      '<i style="width:' + size + 'em;height:' + size + 'em;background:' + bg + ';' + (extra || '') + '"></i>';
+    let html = '';
+    for (let i = 0; i < 6; i++) {
+      const f = (i + 1) / 6, op = 'opacity:' + (0.25 + 0.75 * f).toFixed(2) + ';';
+      if (id === 'trail_dots') html += dot(0.3, ballColor, op + 'margin:0 .14em;');
+      else if (id === 'trail_ribbon') html += dot(0.5, ballColor, op + 'border-radius:0;width:.5em;height:' + (0.12 + 0.5 * f).toFixed(2) + 'em;margin:0;');
+      else if (id === 'trail_spark') html += dot(i % 2 ? 0.2 : 0.34, i % 2 ? '#fff3c4' : ballColor, op + 'transform:translateY(' + (i % 2 ? -0.3 : 0.1) + 'em);');
+      else if (id === 'trail_fire') html += dot(0.25 + 0.4 * f, f > 0.66 ? '#ffe27a' : f > 0.33 ? '#ff9a3c' : '#e0452a', op);
+      else if (id === 'trail_rainbow') html += dot(0.25 + 0.35 * f, 'hsl(' + (i * 55) + ',85%,65%)', op);
+      else if (id === 'trail_void') html += dot(0.25 + 0.4 * f, '#12061f', op + 'box-shadow:0 0 0 1.5px #b388ff;margin:0 .1em;');
+      else html += dot(0.2 + 0.4 * f, ballColor, op);
+    }
+    return html + '<i class="ballsw small" style="background:' + ballColor + '"></i>';
+  }
+
   const render = {
+    customize() {
+      const stars = O.getStars(), eq = O.getEquip();
+      const card = (kind, it) => {
+        const equipped = eq[kind].id === it.id;
+        let status, cls;
+        if (equipped) { status = 'EQUIPPED'; cls = 'equipped'; }
+        else if (O.isUnlocked(it)) { status = 'OWNED'; cls = 'owned'; }
+        else if (it.unlock) { status = O.achievement(it.unlock.ach).name + ' LV ' + it.unlock.level; cls = 'locked'; }
+        else if (pendingBuy === it.id) { status = 'TAP TO BUY'; cls = 'confirm'; }
+        else { status = '&#9733; ' + it.price; cls = stars >= it.price ? 'buyable' : 'poor'; }
+        return '<button type="button" class="item ' + cls + '" data-kind="' + kind + '" data-item="' + it.id + '" tabindex="-1">' +
+          '<span class="swatch">' + (kind === 'ball'
+            ? '<i class="ballsw" style="background:' + it.color + '"></i>'
+            : trailSwatch(it.id, eq.ball.color)) + '</span>' +
+          '<span class="item-name">' + it.name + '</span>' +
+          '<span class="item-status">' + status + '</span></button>';
+      };
+      body.innerHTML =
+        '<div class="wallet"><span>YOUR STARS</span><b>&#9733; ' + stars + '</b></div>' +
+        '<p class="shopnote">' + (shopNote || 'Tap an item to equip it. Tap a priced item twice to buy it.') + '</p>' +
+        '<h2>BALL COLOR</h2><div class="grid">' + O.COSMETICS.ball.map((it) => card('ball', it)).join('') + '</div>' +
+        '<h2>TRAIL</h2><div class="grid">' + O.COSMETICS.trail.map((it) => card('trail', it)).join('') + '</div>' +
+        '<p class="note">Stars float between planets. Each one adds to your total, and big ringed stars are worth 5.</p>';
+    },
+
     settings() {
       const lv = O.sfx.level, max = O.VOLUME_STEPS;
       let bars = '';
@@ -116,6 +162,7 @@
   };
 
   function show(tab) {
+    if (tab !== current || tab !== 'customize') { pendingBuy = null; shopNote = ''; }
     current = tab;
     if (tab === 'achievements') O.setNum(O.KEY.newAch, 0);   // 탭을 열면 확인한 것으로 처리
     refreshBadge();
@@ -149,11 +196,42 @@
 
   body.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-vol]');
-    if (!btn) return;
-    O.sfx.setVolume(O.sfx.level + Number(btn.dataset.vol));
-    O.sfx.capture(1);              // 바뀐 크기로 미리 듣기
-    render.settings();
+    if (btn) {
+      O.sfx.setVolume(O.sfx.level + Number(btn.dataset.vol));
+      O.sfx.capture(1);              // 바뀐 크기로 미리 듣기
+      render.settings();
+      return;
+    }
+    const card = e.target.closest('[data-item]');
+    if (card) { pickItem(card.dataset.kind, card.dataset.item); blur(); }
   });
+
+  // 꾸미기 항목을 눌렀을 때: 가진 것은 장착, 살 수 있는 것은 한 번 더 눌러 구매
+  function pickItem(kind, id) {
+    const it = O.COSMETICS[kind].find((x) => x.id === id);
+    if (!it) return;
+    shopNote = '';
+    if (O.isUnlocked(it)) {
+      O.equip(kind, id);
+      pendingBuy = null;
+    } else if (it.unlock) {
+      shopNote = it.name + ' unlocks at ' + O.achievement(it.unlock.ach).name + ' LV ' + it.unlock.level + '.';
+      pendingBuy = null;
+    } else if (O.getStars() < it.price) {
+      shopNote = 'You need ' + (it.price - O.getStars()) + ' more stars for ' + it.name + '.';
+      pendingBuy = null;
+    } else if (pendingBuy === id) {
+      O.buy(id);
+      O.equip(kind, id);
+      pendingBuy = null;
+      O.sfx.achieve();
+    } else {
+      pendingBuy = id;               // 실수로 사지 않도록 한 번 더 눌러야 구매
+    }
+    render.customize();
+    const scene = game.scene.getScene('game');
+    if (scene && scene.applyStyle) scene.applyStyle();   // 게임에 바로 반영
+  }
 
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;

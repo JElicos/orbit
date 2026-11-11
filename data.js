@@ -7,11 +7,14 @@ window.ORBIT = (() => {
     bestCombo: 'orbitjump.bestCombo',
     bestDist: 'orbitjump.bestDist',     // 가장 멀리 간 행성 번호(거리는 distanceAU로 환산)
     newAch: 'orbitjump.newAch',         // 아직 확인하지 않은 새 도전과제가 있으면 1
+    stars: 'orbitjump.stars',           // 보유 별(꾸미기 항목을 사는 데 씀)
+    owned: 'orbitjump.owned',           // 구매한 꾸미기 항목 id 목록
+    equip: 'orbitjump.equip',           // 장착 중인 항목 { ball, trail }
     volume: 'orbitjump.volume',
     history: 'orbitjump.history',
     stats: 'orbitjump.stats',
   };
-  const VERSION = '1.10';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
+  const VERSION = '1.11';      // 메뉴 SETTINGS 탭에 표시. 고칠 때마다 올립니다.
   const VOLUME_STEPS = 5;     // 0(끔) ~ 5
   const HISTORY_MAX = 10;
 
@@ -113,7 +116,77 @@ window.ORBIT = (() => {
     return loadStats()[id] || 0;
   };
 
+  // ---------- 별과 꾸미기 ----------
+  // price: 별 가격(0이면 기본 제공). unlock: 별로 살 수 없고 도전과제 단계를 달성하면 열림.
+  const COSMETICS = {
+    ball: [
+      { id: 'ball_white', name: 'WHITE', color: '#ffffff', price: 0 },
+      { id: 'ball_sky', name: 'SKY', color: '#7fdcff', price: 10 },
+      { id: 'ball_lime', name: 'LIME', color: '#b6f36a', price: 20 },
+      { id: 'ball_gold', name: 'GOLD', color: '#ffd166', price: 35 },
+      { id: 'ball_pink', name: 'PINK', color: '#ff8fc7', price: 50 },
+      { id: 'ball_ember', name: 'EMBER', color: '#ff9a3c', price: 70 },
+      { id: 'ball_violet', name: 'VIOLET', color: '#b388ff', price: 100 },
+      { id: 'ball_crimson', name: 'CRIMSON', color: '#ff5d5d', price: 150 },
+      { id: 'ball_aurora', name: 'AURORA', color: '#7dffc8', unlock: { ach: 'score', level: 6 } },
+    ],
+    trail: [
+      { id: 'trail_comet', name: 'COMET', price: 0 },
+      { id: 'trail_dots', name: 'DOTS', price: 15 },
+      { id: 'trail_ribbon', name: 'RIBBON', price: 30 },
+      { id: 'trail_spark', name: 'SPARKLE', price: 60 },
+      { id: 'trail_fire', name: 'FIRE', price: 100 },
+      { id: 'trail_rainbow', name: 'RAINBOW', price: 180 },
+      { id: 'trail_void', name: 'VOID', unlock: { ach: 'stage', level: 10 } },
+    ],
+  };
+  const allItems = () => COSMETICS.ball.concat(COSMETICS.trail);
+  const getStars = () => Math.max(0, Math.floor(getNum(KEY.stars, 0)));
+  const addStars = (n) => { const v = getStars() + n; setNum(KEY.stars, v); return v; };
+  const ownedIds = () => {
+    const o = getJSON(KEY.owned, []);
+    return Array.isArray(o) ? o.filter((x) => typeof x === 'string') : [];
+  };
+  const isUnlocked = (it) => {
+    if (it.unlock) {
+      const a = achievement(it.unlock.ach);
+      return tierOf(a.tiers, valueOf(a.id)) >= it.unlock.level;
+    }
+    return it.price === 0 || ownedIds().includes(it.id);
+  };
+  // 별이 충분하면 차감하고 구매 목록에 추가
+  const buy = (id) => {
+    const it = allItems().find((x) => x.id === id);
+    if (!it || it.unlock || isUnlocked(it)) return false;
+    const have = getStars();
+    if (have < it.price) return false;
+    setNum(KEY.stars, have - it.price);
+    setJSON(KEY.owned, ownedIds().concat(id));
+    return true;
+  };
+  // 장착 중인 항목. 저장된 값이 없거나 잠긴 항목이면 기본 항목으로.
+  const getEquip = () => {
+    const e = getJSON(KEY.equip, {}) || {};
+    const pick = (kind) => {
+      const it = COSMETICS[kind].find((x) => x.id === e[kind]);
+      return it && isUnlocked(it) ? it : COSMETICS[kind][0];
+    };
+    return { ball: pick('ball'), trail: pick('trail') };
+  };
+  const equip = (kind, id) => {
+    const it = COSMETICS[kind].find((x) => x.id === id);
+    if (!it || !isUnlocked(it)) return false;
+    const e = getJSON(KEY.equip, {}) || {};
+    e[kind] = id;
+    setJSON(KEY.equip, e);
+    return true;
+  };
+  // 도전과제 achId가 fromLevel 초과 ~ toLevel 이하 단계에서 여는 항목들
+  const rewardsFor = (achId, fromLevel, toLevel) => allItems().filter((x) =>
+    x.unlock && x.unlock.ach === achId && x.unlock.level > fromLevel && x.unlock.level <= toLevel);
+
   return {
+    COSMETICS, getStars, addStars, isUnlocked, buy, getEquip, equip, rewardsFor,
     KEY, VERSION, VOLUME_STEPS, HISTORY_MAX, ACHIEVEMENTS,
     STAGE_LEN, STAGES, stageOf, distanceAU, formatAU,
     getNum, setNum, loadStats, saveStats, loadHistory, addHistory,

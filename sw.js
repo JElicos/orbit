@@ -1,6 +1,6 @@
 // 오프라인 실행용 서비스 워커.
 // 온라인이면 항상 최신 파일을 받아 저장해 두고, 오프라인이면 저장된 파일로 실행합니다.
-const CACHE = 'orbit-v2';
+const CACHE = 'orbit-v3';
 const FILES = [
   './',
   'index.html',

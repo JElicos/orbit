@@ -198,6 +198,10 @@
       this.stars = [];
       this.rings = [];
       this.trail = [];
+      this.trailSeq = 0;
+      this.starsRun = 0;          // 이번 시도에서 모은 별
+      this.ballColor = C.ball;    // 장착한 공 색과 궤적(applyStyle에서 설정)
+      this.trailStyle = 'trail_comet';
       this.nextIndex = 0;
 
       // 배경 별(시차 3겹)
@@ -284,6 +288,10 @@
 
       this.toastText = txt(W / 2, top + 180, '', 22, '#ffffff').setAlpha(0);
 
+      // 보유 별
+      this.starText = txt(16, top + 48, '', 18, '#ffd166').setOrigin(0, 0.5);
+      this.applyStyle();
+
       // 현재 거리와 스테이지
       this.distText = txt(W / 2, top + 118, '', 18, '#8fa3c8');
       this.updateDist();
@@ -310,6 +318,7 @@
       this.comboText.setY(top + 152);
       // 노치가 있는 기기는 상태 표시줄 바로 아래가 흐리게 처리되므로 조금 더 내림
       this.bestText.setY(top + (top > 0 ? 50 : 22));
+      this.starText.setY(top + (top > 0 ? 76 : 48));
       this.toastText.setY(top + 196);
       this.hintText.setY(bottom - 160);
       if (this.titleGroup[0]) this.titleGroup[0].setY(top + 220);
@@ -327,6 +336,16 @@
 
     // 행성 번호를 "5.4 AU" 같은 거리 글자로
     distLabel(index) { return O.formatAU(O.distanceAU(index)) + ' AU'; }
+
+    updateStars() { this.starText.setText('★ ' + O.getStars()); }
+
+    // 장착한 공 색과 궤적을 적용(메뉴에서 바꾸면 ui.js가 다시 부름)
+    applyStyle() {
+      const eq = O.getEquip();
+      this.ballColor = parseInt(eq.ball.color.slice(1), 16);
+      this.trailStyle = eq.trail.id;
+      this.updateStars();
+    }
 
     updateDist() {
       this.distText.setText(this.distLabel(this.maxIndex) + '  ·  ' + O.STAGES[O.stageOf(this.maxIndex)].name);
@@ -358,7 +377,7 @@
       Sfx.achieve();
       const found = this.unlocked.find((u) => u.id === ach.id);
       if (found) found.level = Math.max(found.level, level);   // 같은 종목은 가장 높은 단계만
-      else this.unlocked.push({ id: ach.id, name: ach.name, level });
+      else this.unlocked.push({ id: ach.id, name: ach.name, level, from: level - 1 });   // from: 이번 판 시작 전 단계
       O.setNum(O.KEY.newAch, 1);
       if (O.ui) O.ui.refreshBadge();
     }
@@ -405,7 +424,11 @@
           const mx = (prev.x + p.x) / 2, my = (prev.y + p.y) / 2;
           const dx = p.x - prev.x, dy = p.y - prev.y, len = Math.hypot(dx, dy) || 1;
           const off = rnd(-40, 40);
-          this.stars.push({ x: clamp(mx - dy / len * off, 20, W - 20), y: my + dx / len * off, taken: false });
+          // 4스테이지(JUPITER)부터는 가끔 별 5개짜리 큰 별
+          this.stars.push({
+            x: clamp(mx - dy / len * off, 20, W - 20), y: my + dx / len * off, taken: false,
+            big: O.stageOf(i) >= 3 && Math.random() < 0.2,
+          });
         }
 
         // 블랙홀: 일정 스테이지부터, 멀리 갈수록 자주(고정 행성 사이에만)
@@ -560,7 +583,7 @@
         // 이번 판에서 달성한 도전과제(최대 4줄, 넘으면 "+N MORE")
         const shown = this.unlocked.slice(0, 4), more = this.unlocked.length - shown.length;
         const achH = this.unlocked.length ? 44 + (shown.length + (more > 0 ? 1 : 0)) * 28 : 0;
-        const mid = H / 2 - 190 - achH / 2;   // 게임 오버 글자 묶음의 맨 윗줄
+        const mid = H / 2 - 205 - achH / 2;   // 게임 오버 글자 묶음의 맨 윗줄
         this.distText.setVisible(false);
         const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setScrollFactor(0).setDepth(9).setAlpha(0);
         const mk = (y, s, size, color) => this.add.text(W / 2, y, s, {
@@ -573,14 +596,20 @@
           mk(mid + 138, newBest ? 'NEW BEST!' : 'BEST ' + this.best, 22, newBest ? '#ffd166' : '#8fa3c8'),
           mk(mid + 196, this.distLabel(this.maxIndex) + '  ·  ' + O.STAGES[O.stageOf(this.maxIndex)].name, 28, '#ffffff'),
           mk(mid + 234, newDist ? 'NEW DISTANCE RECORD!' : 'FARTHEST ' + this.distLabel(this.bestIndex), 20, newDist ? '#ffd166' : '#8fa3c8'),
-          mk(mid + 280, 'MAX COMBO x' + this.maxCombo + '  ·  ALL-TIME x' + this.bestCombo, 20, '#8fa3c8'),
-          mk(mid + 370 + achH, this.isTouch() ? 'TAP TO RETRY' : 'SPACE / CLICK TO RETRY', 22, '#cfe3ff'),
+          mk(mid + 276, 'MAX COMBO x' + this.maxCombo + '  ·  ALL-TIME x' + this.bestCombo, 20, '#8fa3c8'),
+          mk(mid + 306, '★ +' + this.starsRun + '  ·  TOTAL ' + O.getStars(), 20, '#ffd166'),
+          mk(mid + 400 + achH, this.isTouch() ? 'TAP TO RETRY' : 'SPACE / CLICK TO RETRY', 22, '#cfe3ff'),
         ];
         if (this.unlocked.length) {
-          items.push(mk(mid + 334, 'ACHIEVEMENTS UNLOCKED', 18, '#ffd166').setLetterSpacing(3));
-          shown.forEach((u, i) => items.push(mk(mid + 368 + i * 28, u.name + '   LV ' + u.level, 20, '#ffffff')));
-          if (more > 0) items.push(mk(mid + 368 + shown.length * 28, '+' + more + ' MORE', 18, '#8fa3c8'));
+          items.push(mk(mid + 360, 'ACHIEVEMENTS UNLOCKED', 18, '#ffd166').setLetterSpacing(3));
+          shown.forEach((u, i) => {
+            // 이 도전과제로 열린 꾸미기 항목이 있으면 함께 표시
+            const reward = O.rewardsFor(u.id, u.from, u.level).map((r) => r.name).join(', ');
+            items.push(mk(mid + 394 + i * 28, u.name + '   LV ' + u.level + (reward ? '   ·   ' + reward + ' UNLOCKED' : ''), 20, '#ffffff'));
+          });
+          if (more > 0) items.push(mk(mid + 394 + shown.length * 28, '+' + more + ' MORE', 18, '#8fa3c8'));
         }
+        this.starText.setVisible(false);
         this.scoreText.setVisible(false); this.comboText.setVisible(false);
         this.tweens.add({ targets: items, alpha: { from: 0, to: 1 }, duration: 250 });
         dim.setAlpha(0);
@@ -620,8 +649,12 @@
           for (const s of this.stars) {
             if (!s.taken && Math.hypot(b.x - s.x, b.y - s.y) <= STAR_PICK_R) {
               s.taken = true;
-              this.addScore(STAR_SCORE);
-              this.popup(s.x, s.y - 20, '+' + STAR_SCORE, '#ffd166');
+              const worth = s.big ? 5 : 1;          // 보유 별 증가량
+              O.addStars(worth);
+              this.starsRun += worth;
+              this.updateStars();
+              this.addScore(s.big ? 5 : STAR_SCORE);
+              this.popup(s.x, s.y - 20, '★ +' + worth, '#ffd166');
               this.emitter.setParticleTint(C.star);
               this.emitter.explode(10, s.x, s.y);
               Sfx.star();
@@ -642,8 +675,8 @@
       }
 
       if (this.state !== 'dead') {
-        this.trail.push({ x: b.x, y: b.y });
-        if (this.trail.length > 22) this.trail.shift();
+        this.trail.push({ x: b.x, y: b.y, q: this.trailSeq++ });   // q: 지점 순번(점선, 무지개 등에 사용)
+        if (this.trail.length > 40) this.trail.shift();
       } else if (this.trail.length) {
         this.trail.shift();
       }
@@ -896,6 +929,74 @@
       }
     }
 
+    // 장착한 궤적 종류대로 꼬리를 그림. this.trail은 오래된 지점부터 최근 지점 순서.
+    drawTrail(g) {
+      const tr = this.trail, n = tr.length, col = this.ballColor, t = this.t;
+      if (!n) return;
+      const start = Math.max(0, n - 22);                       // 대부분은 최근 22개 지점만 사용
+      const frac = (i) => (i - start + 1) / (n - start);       // 0(꼬리 끝) ~ 1(공 바로 뒤)
+
+      switch (this.trailStyle) {
+        case 'trail_dots':      // 일정 간격으로 남는 점
+          for (let i = start; i < n; i++) {
+            if (tr[i].q % 4) continue;
+            g.fillStyle(col, 0.2 + 0.65 * frac(i));
+            g.fillCircle(tr[i].x, tr[i].y, 3.2);
+          }
+          break;
+        case 'trail_ribbon':    // 길게 이어지는 띠
+          for (let i = 1; i < n; i++) {
+            const f = i / n;
+            g.lineStyle(1 + 8 * f, col, 0.12 + 0.6 * f);
+            g.lineBetween(tr[i - 1].x, tr[i - 1].y, tr[i].x, tr[i].y);
+          }
+          break;
+        case 'trail_spark':     // 가는 꼬리 주변에 반짝이는 입자
+          for (let i = start; i < n; i++) {
+            const p = tr[i], f = frac(i);
+            g.fillStyle(col, f * 0.35);
+            g.fillCircle(p.x, p.y, BALL_R * 0.5 * f);
+            if (p.q % 2 === 0) {
+              const ox = Math.sin(p.q * 12.9898) * 10, oy = Math.cos(p.q * 78.233) * 10;
+              g.fillStyle(0xfff3c4, f * (0.45 + 0.55 * Math.sin(t * 14 + p.q)));
+              g.fillRect(p.x + ox - 1.6, p.y + oy - 1.6, 3.2, 3.2);
+            }
+          }
+          break;
+        case 'trail_fire':      // 노랑에서 빨강으로 식어가는 불꽃
+          for (let i = start; i < n; i++) {
+            const p = tr[i], f = frac(i);
+            g.fillStyle(f > 0.66 ? 0xffe27a : f > 0.33 ? 0xff9a3c : 0xe0452a, 0.2 + 0.55 * f);
+            g.fillCircle(p.x + Math.sin(p.q * 3.1 + t * 10) * 2.5 * (1 - f), p.y, BALL_R * (0.45 + 0.7 * f));
+          }
+          break;
+        case 'trail_rainbow':
+          for (let i = start; i < n; i++) {
+            const p = tr[i], f = frac(i);
+            g.fillStyle(Phaser.Display.Color.HSVToRGB(((p.q * 9) % 360) / 360, 0.75, 1).color, 0.25 + 0.6 * f);
+            g.fillCircle(p.x, p.y, BALL_R * (0.35 + 0.6 * f));
+          }
+          break;
+        case 'trail_void':      // 어두운 원에 보랏빛 테두리
+          for (let i = start; i < n; i += 2) {
+            const p = tr[i], f = frac(i), r = BALL_R * (0.4 + 0.8 * f);
+            g.fillStyle(0x12061f, 0.55 * f);
+            g.fillCircle(p.x, p.y, r);
+            g.lineStyle(1.5, 0xb388ff, 0.75 * f);
+            g.strokeCircle(p.x, p.y, r);
+          }
+          break;
+        default: {              // COMET: 기본 혜성 꼬리
+          const tint = mixColor(col, 0x9fdcff, 0.5);
+          for (let i = start; i < n; i++) {
+            const f = frac(i);
+            g.fillStyle(tint, f * 0.5);
+            g.fillCircle(tr[i].x, tr[i].y, BALL_R * (0.3 + 0.6 * f));
+          }
+        }
+      }
+    }
+
     // ----- 그리기 -----
     draw() {
       const g = this.g, b = this.ball;
@@ -907,7 +1008,11 @@
       // 별
       for (const s of this.stars) {
         if (s.taken) continue;
-        const k = 9 + Math.sin(this.t * 4 + s.x) * 1.5;
+        const k = (s.big ? 15 : 9) + Math.sin(this.t * 4 + s.x) * 1.5;
+        if (s.big) {
+          g.lineStyle(2, C.star, 0.5 + 0.3 * Math.sin(this.t * 5));
+          g.strokeCircle(s.x, s.y, 21);
+        }
         g.fillStyle(C.star, 1);
         g.fillTriangle(s.x, s.y - k, s.x + k * 0.45, s.y, s.x - k * 0.45, s.y);
         g.fillTriangle(s.x, s.y + k, s.x + k * 0.45, s.y, s.x - k * 0.45, s.y);
@@ -986,18 +1091,13 @@
       }
 
       // 꼬리와 공
-      const n = this.trail.length;
-      for (let i = 0; i < n; i++) {
-        const f = (i + 1) / n;
-        g.fillStyle(0x9fdcff, f * 0.5);
-        g.fillCircle(this.trail[i].x, this.trail[i].y, BALL_R * (0.3 + 0.6 * f));
-      }
+      this.drawTrail(g);
       if (this.state !== 'dead') {
-        g.fillStyle(C.ball, 1);
+        g.fillStyle(this.ballColor, 1);
         g.fillCircle(b.x, b.y, BALL_R);
       } else if (this.suck && this.suck.k < 1) {
         const s = this.suck, k = s.k * s.k;   // 중심으로 갈수록 빨라짐
-        g.fillStyle(C.ball, 1);
+        g.fillStyle(this.ballColor, 1);
         g.fillCircle(lerp(s.x, s.hole.x, k), lerp(s.y, s.hole.y, k), BALL_R * (1 - s.k));
       }
 
