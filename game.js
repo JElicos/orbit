@@ -71,6 +71,28 @@
 
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const mixColor = (c1, c2, t) => {
+    const r = Math.round(lerp((c1 >> 16) & 255, (c2 >> 16) & 255, t));
+    const g = Math.round(lerp((c1 >> 8) & 255, (c2 >> 8) & 255, t));
+    const b = Math.round(lerp(c1 & 255, c2 & 255, t));
+    return (r << 16) | (g << 8) | b;
+  };
+
+  // 스테이지별 배경 테마(data.js의 STAGES와 같은 순서).
+  // top/bottom: 배경 위아래 색, star: 별 색, starA: 별 밝기 배율, sun: 아래쪽 태양빛 세기
+  const THEMES = [
+    { top: 0x06102a, bottom: 0x0d2a55, star: 0xffffff, starA: 0.9, sun: 1.0 },    // EARTH
+    { top: 0x140b12, bottom: 0x2a1210, star: 0xffe2d0, starA: 0.9, sun: 0.8 },    // MARS
+    { top: 0x0e0d12, bottom: 0x1a1612, star: 0xf2e8dc, starA: 0.8, sun: 0.6 },    // ASTEROID BELT
+    { top: 0x120d0a, bottom: 0x24170f, star: 0xffecd2, starA: 0.8, sun: 0.4 },    // JUPITER
+    { top: 0x100e0a, bottom: 0x221c10, star: 0xfff2d6, starA: 0.9, sun: 0.3 },    // SATURN
+    { top: 0x06121a, bottom: 0x0a2630, star: 0xd6f6ff, starA: 1.0, sun: 0.18 },   // ICE GIANTS
+    { top: 0x05080f, bottom: 0x0a1220, star: 0xdde8ff, starA: 1.1, sun: 0.08 },   // KUIPER BELT
+    { top: 0x0a0616, bottom: 0x160a2a, star: 0xe6dcff, starA: 1.3, sun: 0 },      // HELIOPAUSE
+    { top: 0x050709, bottom: 0x0b1114, star: 0xe8f4ff, starA: 1.2, sun: 0 },      // OORT CLOUD
+    { top: 0x020203, bottom: 0x06040a, star: 0xffffff, starA: 1.4, sun: 0 },      // BEYOND
+  ];
 
   // 렌더링 배율: 화면의 실제 픽셀 수에 맞춰 1~3배로 그림(게임 속 좌표는 540x960 그대로)
   const RES = (() => {
@@ -128,6 +150,7 @@
     star() { this.tone(1320, 1760, 0.12, 'sine', 0.6); this.tone(1976, 1976, 0.15, 'sine', 0.4, 0.07); },
     die() { this.tone(300, 50, 0.5, 'sawtooth', 0.6); this.tone(90, 40, 0.5, 'square', 0.4); },
     achieve() { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, f, 0.16, 'triangle', 0.5, 0.12 + i * 0.07)); },
+    stage() { [392, 523, 659, 784].forEach((f, i) => this.tone(f, f, 0.5, 'sine', 0.45, i * 0.09)); },
   };
   O.sfx = Sfx;
   // 아이폰은 손을 뗄 때(touchend)나 클릭에서만 소리 재생이 허용됩니다.
@@ -155,6 +178,9 @@
       this.stats = O.loadStats();                           // 행성 종류별 누적 착지 횟수
       this.scoreTier = O.tierOf(SCORE_TIERS, this.best);    // 이미 달성한 점수 도전과제 단계
       this.jumps = 0;                                       // 이번 시도에서 옮겨 탄 행성 수
+      this.stage = 0;                                       // 현재 스테이지(0부터)
+      this.prevStage = 0;                                   // 배경이 바뀌는 동안의 이전 스테이지
+      this.themeMix = 1;                                    // 이전 -> 현재 배경 전환 진행도(0~1)
 
       this.planets = [];
       this.stars = [];
@@ -198,6 +224,9 @@
         planet: p0, left: null, angle: -Math.PI / 2, dir: 1, orbR: p0.orbitR, swept: TAU,
       };
       this.camY = p0.y - H * CAM_ANCHOR;
+      this.camY0 = this.camY;       // 현재 스테이지에 들어선 순간의 카메라 위치(배경 천체의 기준점)
+      this.prevCamY0 = this.camY;
+      this.initBackdrops();
       this.lavaY = p0.y + H * (1 - CAM_ANCHOR) + 184;   // 화면 아래쪽 바깥에서 시작
       while (this.topPlanet().y > this.camY - 400) this.spawnPlanet();
 
@@ -243,6 +272,10 @@
 
       this.toastText = txt(W / 2, top + 180, '', 22, '#ffffff').setAlpha(0);
 
+      // 스테이지 전환 배너
+      this.bannerTop = txt(W / 2, H * 0.34, '', 22, '#8fa3c8').setLetterSpacing(8).setAlpha(0);
+      this.bannerName = txt(W / 2, H * 0.34 + 48, '', 50, '#ffffff').setLetterSpacing(4).setAlpha(0);
+
       // 여백 값이 늦게 확정되는 기기를 위해 잠시 뒤 다시 재서 위치를 맞춤
       this.layoutUI();
       [300, 1200].forEach((ms) => this.time.delayedCall(ms, () => this.layoutUI()));
@@ -269,6 +302,26 @@
       this.toastText.setText(msg).setColor(color || '#ffffff').setAlpha(1);
       this.tweens.killTweensOf(this.toastText);
       this.tweens.add({ targets: this.toastText, alpha: 0, delay: 1300, duration: 500 });
+    }
+
+    showBanner(stage) {
+      const banner = [this.bannerTop, this.bannerName];
+      this.bannerTop.setText('STAGE ' + (stage + 1));
+      this.bannerName.setText(O.STAGES[stage].name);
+      this.tweens.killTweensOf(banner);
+      banner.forEach((b) => b.setAlpha(0));
+      this.tweens.add({ targets: banner, alpha: 1, duration: 350, hold: 1500, yoyo: true });
+    }
+
+    // 새 스테이지 진입: 배경 전환을 시작하고 배너를 띄움
+    enterStage(stage) {
+      this.prevStage = this.stage;
+      this.prevCamY0 = this.camY0;
+      this.stage = stage;
+      this.camY0 = this.camY;
+      this.themeMix = 0;
+      this.showBanner(stage);
+      Sfx.stage();
     }
 
     achieved(name, level) {
@@ -337,6 +390,7 @@
         seenTitle = true;
         this.tweens.killTweensOf(this.hintText);
         this.tweens.add({ targets: [this.hintText, ...this.titleGroup], alpha: 0, duration: 250 });
+        this.showBanner(0);
         this.quick = false;
       } else {
         this.quick = b.swept < TAU;   // 한 바퀴 돌기 전에 뛰면 콤보 유지
@@ -386,6 +440,8 @@
         const ach = O.achievement(p.type);
         const lv = ach.tiers.indexOf(this.stats[p.type]);
         if (lv >= 0) this.achieved(ach.name, lv + 1);
+        const stage = O.stageOf(p.index);
+        if (stage !== this.stage) this.enterStage(stage);
       } else {
         this.combo = 0;   // 이미 지난 행성으로 돌아가면 점수 없음
       }
@@ -515,22 +571,236 @@
       if (this.planets[0].y > cut && this.planets[0] !== b.planet && this.planets[0] !== b.left) this.planets.shift();
       if (this.stars.length && this.stars[0].y > cut) this.stars.shift();
 
+      if (this.themeMix < 1) this.themeMix = Math.min(1, this.themeMix + dt / 2.5);
+
       for (const r of this.rings) { r.life -= dt * 2.2; r.r += 90 * dt; }
       this.rings = this.rings.filter((r) => r.life > 0);
 
       this.draw();
     }
 
-    // ----- 그리기 -----
-    draw() {
-      const bg = this.bg, g = this.g, b = this.ball;
+    // ----- 배경 -----
+    // 배경에 쓰는 무작위 요소(암석, 얼음 조각, 안개, 혜성, 은하)를 한 번만 만들어 둠
+    initBackdrops() {
+      const rocks = (n, minS, maxS) => Array.from({ length: n }, () => {
+        const size = rnd(minS, maxS), k = 5 + Math.floor(Math.random() * 3);
+        return {
+          x: Math.random() * W, y: Math.random() * (H + 80), f: rnd(0.25, 0.6),
+          rot: rnd(0, TAU), spin: rnd(-0.4, 0.4),
+          shape: Array.from({ length: k }, (_, j) => ({ a: j / k * TAU, r: size * rnd(0.6, 1) })),
+        };
+      });
+      this.rocks = rocks(26, 4, 16);
+      this.ice = rocks(14, 3, 9);
+      this.fog = Array.from({ length: 10 }, () => ({
+        x: Math.random() * W, y: Math.random() * (H + 80), f: rnd(0.05, 0.15), r: rnd(120, 260),
+      }));
+      this.comets = Array.from({ length: 8 }, () => ({
+        x: Math.random() * W, y: Math.random() * (H + 80), f: rnd(0.2, 0.45), a: rnd(0.7, 2.4),
+      }));
+      this.galaxy = Array.from({ length: 170 }, (_, i) => {
+        const u = Math.random();
+        return { ang: (i % 2) * Math.PI + u * 5.5 + rnd(-0.25, 0.25), rad: 14 + u * 170 + rnd(-8, 8), r: rnd(0.8, 2), a: rnd(0.25, 0.7) };
+      });
+    }
 
+    // 카메라 이동에 따라 천천히 흘러가다 화면 밖으로 나가면 반대쪽에서 다시 나오는 y 좌표
+    wrapY(y, f) {
+      const span = H + 80;
+      return (((y - this.camY * f) % span) + span) % span - 40;
+    }
+
+    drawBackground() {
+      const bg = this.bg, m = this.themeMix;
+      const a = THEMES[this.prevStage], b = THEMES[this.stage];
       bg.clear();
+
+      const top = mixColor(a.top, b.top, m), bottom = mixColor(a.bottom, b.bottom, m);
+      bg.fillGradientStyle(top, top, bottom, bottom, 1);
+      bg.fillRect(0, 0, W, H);
+
+      // 아래쪽(태양 방향)에서 올라오는 빛. 멀어질수록 약해짐.
+      const sun = lerp(a.sun, b.sun, m);
+      if (sun > 0.01) {
+        for (let i = 0; i < 22; i++) {   // 옅은 원을 촘촘히 겹쳐 띠가 보이지 않게 함
+          bg.fillStyle(0xffc98a, 0.009 * sun);
+          bg.fillCircle(W / 2, H + 300, 420 + i * 32);
+        }
+      }
+
+      const starColor = mixColor(a.star, b.star, m), starA = lerp(a.starA, b.starA, m);
       for (const s of this.bgStars) {
         const y = (((s.y - this.camY * s.f) % H) + H) % H;
-        bg.fillStyle(0xffffff, s.a * (0.7 + 0.3 * Math.sin(this.t * 2 + s.tw)));
+        bg.fillStyle(starColor, Math.min(1, s.a * starA * (0.7 + 0.3 * Math.sin(this.t * 2 + s.tw))));
         bg.fillCircle(s.x, y, s.r);
       }
+
+      if (m < 1) this.drawBackdrop(this.prevStage, 1 - m, this.prevCamY0);
+      this.drawBackdrop(this.stage, m, this.camY0);
+    }
+
+    // 가로 줄무늬가 있는 원(목성, 토성). 매끈한 원 위에 가로 띠를 얹어 그림.
+    bandedDisc(cx, cy, R, base, bands, alpha) {
+      const bg = this.bg, step = 4, inner = R - 1.5;
+      bg.fillStyle(base, alpha);
+      bg.fillCircle(cx, cy, R);
+      for (let dy = -inner; dy < inner; dy += step) {
+        if (cy + dy > H || cy + dy + step < 0) continue;
+        const mid = dy + step / 2;
+        const half = Math.sqrt(Math.max(0, inner * inner - mid * mid));
+        const u = (mid + inner) / (2 * inner);
+        const col = bands[Math.min(bands.length - 1, Math.floor(u * bands.length))];
+        if (col === base) continue;
+        bg.fillStyle(col, alpha);
+        bg.fillRect(cx - half, cy + dy, half * 2, step);
+      }
+    }
+
+    drawRocks(list, color, alpha) {
+      const bg = this.bg;
+      bg.fillStyle(color, alpha);
+      for (const r of list) {
+        const y = this.wrapY(r.y, r.f), rot = r.rot + this.t * r.spin;
+        bg.fillPoints(r.shape.map((s) => ({ x: r.x + Math.cos(s.a + rot) * s.r, y: y + Math.sin(s.a + rot) * s.r })), true);
+      }
+    }
+
+    // 스테이지별 배경 천체. alpha는 전환 중 서서히 나타나고 사라지는 정도.
+    drawBackdrop(stage, alpha, camY0) {
+      if (alpha <= 0.01) return;
+      const bg = this.bg, t = this.t;
+      const drift = (camY0 - this.camY) * 0.1;   // 위로 올라갈수록 배경 천체는 천천히 아래로
+
+      switch (stage) {
+        case 0: {   // EARTH: 화면 아래의 커다란 지구
+          const R = 760, cx = W / 2, cy = H + 560 + drift * 1.5, topY = cy - R;
+          bg.fillStyle(0x144a8f, alpha);
+          bg.fillCircle(cx, cy, R);
+          bg.fillStyle(0x2c7a52, alpha * 0.9);
+          bg.fillEllipse(cx - 120, topY + 62, 150, 46);
+          bg.fillEllipse(cx + 135, topY + 95, 190, 60);
+          bg.fillStyle(0xffffff, alpha * 0.22);
+          bg.fillEllipse(cx + 20, topY + 40, 120, 22);
+          bg.fillEllipse(cx - 190, topY + 120, 140, 26);
+          bg.lineStyle(5, 0x7fd0ff, alpha * 0.45);
+          bg.strokeCircle(cx, cy, R + 2);
+          bg.lineStyle(16, 0x7fd0ff, alpha * 0.12);
+          bg.strokeCircle(cx, cy, R + 12);
+          break;
+        }
+        case 1: {   // MARS
+          const cx = 425, cy = 300 + drift, R = 120, al = alpha * 0.75;
+          bg.fillStyle(0x8a4226, al);
+          bg.fillCircle(cx, cy, R);
+          bg.fillStyle(0x6b2f1c, al);
+          bg.fillEllipse(cx - 30, cy + 20, 110, 44);
+          bg.fillEllipse(cx + 45, cy - 40, 70, 30);
+          bg.fillEllipse(cx + 20, cy + 70, 60, 22);
+          bg.fillStyle(0xf2e6dc, al * 0.8);
+          bg.fillEllipse(cx, cy - R + 11, 58, 14);
+          bg.lineStyle(3, 0xd98a5f, al * 0.5);
+          bg.strokeCircle(cx, cy, R);
+          break;
+        }
+        case 2:     // ASTEROID BELT
+          this.drawRocks(this.rocks, 0x6a5d50, alpha * 0.75);
+          break;
+        case 3: {   // JUPITER: 왼쪽에 걸친 거대한 줄무늬 행성
+          const cx = 30, cy = 440 + drift, R = 380, al = alpha * 0.45;
+          this.bandedDisc(cx, cy, R, 0x6b5140,
+            [0x6b5140, 0x8a6a4d, 0x5a4032, 0x94775a, 0x6b5140, 0x8f7155, 0x5c4334, 0x80634a, 0x6b5140, 0x5a4032, 0x7a5c44], al);
+          bg.fillStyle(0x8a3f2a, al);
+          bg.fillEllipse(cx + 215, cy + 95, 76, 42);
+          bg.lineStyle(3, 0xb89a78, al * 0.5);
+          bg.strokeCircle(cx, cy, R);
+          break;
+        }
+        case 4: {   // SATURN: 기울어진 고리
+          const cx = 385, cy = 340 + drift, R = 105, al = alpha * 0.7, tilt = -0.35;
+          const ct = Math.cos(tilt), st = Math.sin(tilt);
+          const ring = (rx, ry, a0, a1, w, col, ra) => {
+            const pts = [];
+            for (let i = 0; i <= 28; i++) {
+              const ang = a0 + (a1 - a0) * i / 28, ex = Math.cos(ang) * rx, ey = Math.sin(ang) * ry;
+              pts.push({ x: cx + ex * ct - ey * st, y: cy + ex * st + ey * ct });
+            }
+            bg.lineStyle(w, col, ra);
+            bg.strokePoints(pts, false);
+          };
+          const rings = [[235, 62, 9, 0xb8a67a, 0.5], [205, 54, 12, 0x9c8a60, 0.6], [172, 45, 7, 0xc9b88c, 0.4]];
+          rings.forEach(([rx, ry, w, col, ra]) => ring(rx, ry, Math.PI, TAU, w, col, al * ra));       // 뒤쪽 절반
+          this.bandedDisc(cx, cy, R, 0x8f7d55, [0x8f7d55, 0xa8956a, 0x80704c, 0x9c8a60, 0x8f7d55, 0x7a6a48], al);
+          rings.forEach(([rx, ry, w, col, ra]) => ring(rx, ry, 0, Math.PI, w, col, al * ra));         // 앞쪽 절반
+          break;
+        }
+        case 5: {   // ICE GIANTS: 천왕성과 해왕성
+          const al = alpha * 0.5;
+          bg.fillStyle(0x5a9c9c, al);
+          bg.fillCircle(125, 300 + drift, 95);
+          bg.lineStyle(3, 0xc4f2f2, al * 0.45);
+          bg.strokeCircle(125, 300 + drift, 95);
+          const ny = 660 + drift * 1.4;
+          bg.fillStyle(0x2f4fb0, al);
+          bg.fillCircle(440, ny, 70);
+          bg.fillStyle(0x24408f, al);
+          bg.fillEllipse(425, ny + 12, 80, 18);
+          bg.lineStyle(3, 0x86a4ff, al * 0.45);
+          bg.strokeCircle(440, ny, 70);
+          break;
+        }
+        case 6: {   // KUIPER BELT: 드문 얼음 조각과 멀어진 태양
+          this.drawRocks(this.ice, 0x9db6d0, alpha * 0.55);
+          const sy = H - 150 + drift;
+          bg.fillStyle(0xfff1c8, alpha * 0.15);
+          bg.fillCircle(W / 2, sy, 16);
+          bg.fillStyle(0xfff6dc, alpha * 0.9);
+          bg.fillCircle(W / 2, sy, 4);
+          break;
+        }
+        case 7: {   // HELIOPAUSE: 태양풍이 멈추는 경계의 물결
+          const cy = H + 1100 + drift * 2;
+          [1380, 1450, 1540, 1650].forEach((r, i) => {
+            const pulse = 0.6 + 0.4 * Math.sin(t * 1.2 + i * 1.3);
+            bg.lineStyle(4 + i * 3, i % 2 ? 0x5c7cff : 0x8a5cff, alpha * 0.16 * pulse);
+            bg.strokeCircle(W / 2, cy, r);
+          });
+          break;
+        }
+        case 8: {   // OORT CLOUD: 옅은 안개와 혜성 핵
+          for (const f of this.fog) {
+            const fy = this.wrapY(f.y, f.f);
+            bg.fillStyle(0x9fb4c8, alpha * 0.008);   // 여러 겹으로 겹쳐 가장자리가 흐려지게 함
+            for (let k = 0; k < 6; k++) bg.fillCircle(f.x, fy, f.r * (1 - k * 0.15));
+          }
+          for (const c of this.comets) {
+            const y = this.wrapY(c.y, c.f);
+            bg.lineStyle(2, 0xcfe6ff, alpha * 0.25);
+            bg.lineBetween(c.x, y, c.x + Math.cos(c.a) * 26, y + Math.sin(c.a) * 26);
+            bg.fillStyle(0xe6f3ff, alpha * 0.8);
+            bg.fillCircle(c.x, y, 2.5);
+          }
+          break;
+        }
+        default: {  // BEYOND: 멀리 보이는 은하
+          const cx = W * 0.6, cy = 320 + drift, tilt = -0.5, ct = Math.cos(tilt), st = Math.sin(tilt);
+          for (let i = 0; i < 4; i++) {
+            bg.fillStyle(0xfff0d0, alpha * 0.07);
+            bg.fillCircle(cx, cy, 12 + i * 11);
+          }
+          for (const p of this.galaxy) {
+            const ang = p.ang + t * 0.02, ex = Math.cos(ang) * p.rad, ey = Math.sin(ang) * p.rad * 0.45;
+            bg.fillStyle(0xcdb8ff, alpha * p.a);
+            bg.fillCircle(cx + ex * ct - ey * st, cy + ex * st + ey * ct, p.r);
+          }
+        }
+      }
+    }
+
+    // ----- 그리기 -----
+    draw() {
+      const g = this.g, b = this.ball;
+
+      this.drawBackground();
 
       g.clear();
 
