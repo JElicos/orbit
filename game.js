@@ -18,9 +18,7 @@
   // 아이폰 홈 화면 앱은 페이지 높이를 상태 표시줄만큼 짧게 알려줘서 아래쪽이 비는 문제가 있습니다.
   // 게임 영역 높이를 실제 화면 높이로 직접 지정해 맨 아래까지 채웁니다.
   if (STANDALONE) {
-    const el = document.getElementById('game');
-    el.style.bottom = 'auto';
-    el.style.height = VIEW.vh + 'px';
+    document.getElementById('game').style.height = VIEW.vh + 'px';
   }
   // 게임 높이: 기본 960, 세로로 긴 화면에서는 위아래 빈 띠 없이 꽉 차도록 늘림
   const H = Math.max(960, Math.min(1300, Math.round(W * VIEW.vh / VIEW.vw)));

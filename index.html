@@ -13,6 +13,8 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <script>
+  // 아이폰 홈 화면 앱으로 실행 중이면 전용 배치를 적용
+  if (window.navigator.standalone) document.documentElement.className = 'ios-app';
   // 웹 주소로 열렸을 때만 설치 정보를 연결(파일 더블클릭 실행에서는 건너뜀)
   if (location.protocol !== 'file:') {
     var m = document.createElement('link'); m.rel = 'manifest'; m.href = 'manifest.webmanifest';
@@ -27,6 +29,14 @@
   }
   /* 게임 화면은 노치 영역까지 꽉 채우고, 글자와 버튼만 안쪽으로 피합니다(game.js의 SAFE). */
   #game { position: fixed; left: 0; top: 0; right: 0; bottom: 0; }
+
+  /* 아이폰 홈 화면 앱: 페이지 높이가 상태 표시줄만큼 짧게 잡혀 아래가 비는 문제가 있어,
+     페이지 자체를 그만큼 늘리고 잘라내기를 풀어 맨 아래까지 그려지게 합니다. */
+  html.ios-app { height: 100%; min-height: calc(100% + env(safe-area-inset-top, 0px)); overflow: visible; }
+  html.ios-app body {
+    position: static; height: 100%; min-height: calc(100% + env(safe-area-inset-top, 0px)); overflow: visible;
+  }
+  html.ios-app #game { position: absolute; right: auto; bottom: auto; width: 100%; }
   canvas { display: block; touch-action: none; }
 
   /* 메뉴는 게임 화면 위에 겹쳐지고, 글자 크기는 화면 크기에 맞춰 조정됩니다(ui.js). */
